@@ -1,22 +1,14 @@
 import { NextResponse } from "next/server";
+// Use the correct export name here:
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-// 1. Force Next.js to compile this route on the lightweight Edge infrastructure
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req) {
   try {
-    // 2. Safely read keys inside the request scope context
     const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: "Server authentication credential profile key is missing." },
-        { status: 500 }
-      );
-    }
-
-    // Initialize using standard SDK instantiation pattern
+    // Instantiate using the correct class name
     const genAI = new GoogleGenerativeAI(apiKey);
     
     // 3. Parse user parameters
