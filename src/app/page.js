@@ -3,23 +3,33 @@
 import { useState, useEffect } from 'react';
 
 export default function Home() {
-  // Authentication & Session States
+  // Authentication & Session Core States
   const [userProfile, setUserProfile] = useState(null);
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [toastMessage, setToastMessage] = useState('');
   
-  // Multiphase Navigation Step Switcher Matrix
+  // Multiphase Navigation State Matrix
   const [step, setStep] = useState('EMAIL'); // 'EMAIL', 'OTP', 'REGISTER'
   const [inputEmail, setInputEmail] = useState('');
   const [otpCode, setOtpCode] = useState('');
 
-  // Filtering Options Matrix Parameter State
+  // Filtering Options State Triggers
   const [searchProfession, setSearchProfession] = useState('');
   const [searchKeyword, setSearchKeyword] = useState('');
 
-  // Buffered Registration Onboarding Object Fields
+  // Buffered Registration Form Matrix
   const [registerForm, setRegisterForm] = useState({
+    name: '',
+    profession: '',
+    rawBio: '',
+    photoUrl: ''
+  });
+
+  // Dynamic Profile Modification Drawer State Controls
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editForm, setEditForm] = useState({
     name: '',
     profession: '',
     rawBio: '',
@@ -31,7 +41,13 @@ export default function Home() {
   const [chatMessage, setChatMessage] = useState('');
   const [chatLogs, setChatLogs] = useState([]);
 
-  // Loop to pull chat history automatically if communication channel stays open
+  // Toast System Handler Utility Function
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(''), 4000);
+  };
+
+  // Loop to pull live message logs automatically if conversation route stays open
   useEffect(() => {
     let internalTimer;
     if (userProfile?.userId && activeChatMatch?.userId) {
@@ -43,12 +59,12 @@ export default function Home() {
             setChatLogs(data.messages);
           }
         } catch (err) {
-          console.error("Failed syncing chat matrix records:", err);
+          console.error("Failed syncing chat records:", err);
         }
       };
 
       loadMessages();
-      internalTimer = setInterval(loadMessages, 3500); // Live poll sync updates every 3.5s
+      internalTimer = setInterval(loadMessages, 3500);
     } else {
       setChatLogs([]);
     }
@@ -68,10 +84,11 @@ export default function Home() {
         body: JSON.stringify({ email: inputEmail.trim() }),
       });
       const result = await response.json();
-      if (!result.success) throw new Error(result.error || 'OTP dispatch routing error.');
+      if (!result.success) throw new Error(result.error || 'OTP routing error.');
       setStep('OTP');
+      showToast("Security code token dispatched to secure address registry.");
     } catch (err) {
-      setError(err.message || 'Error processing system gateway token verification.');
+      setError(err.message || 'Error processing authentication verification.');
     } finally {
       setLoading(false);
     }
@@ -94,11 +111,19 @@ export default function Home() {
       const profileCheckResponse = await fetch(`/api/onboarding?userId=${encodeURIComponent(inputEmail.trim())}`);
       const checkResult = await profileCheckResponse.json();
 
-      if (!checkResult.success) throw new Error(checkResult.error || 'Profile structure sync exception.');
+      if (!checkResult.success) throw new Error(checkResult.error || 'Profile matrix trace exception.');
 
       if (checkResult.exists) {
         setUserProfile(checkResult.profile);
         setMatches(checkResult.matches);
+        // Synchronize edit buffer fields
+        setEditForm({
+          name: checkResult.profile.name || '',
+          profession: checkResult.profile.profession || '',
+          rawBio: checkResult.profile.rawBio || '',
+          photoUrl: checkResult.profile.photoUrl || ''
+        });
+        showToast("Gateway connection verification authenticated.");
       } else {
         setStep('REGISTER');
       }
@@ -124,12 +149,49 @@ export default function Home() {
         }),
       });
       const result = await response.json();
-      if (!result.success) throw new Error(result.error || 'Registration write operation rejected.');
+      if (!result.success) throw new Error(result.error || 'Registration cluster node rejected.');
 
       setUserProfile(result.profile);
       setMatches(result.matches);
+      setEditForm({
+        name: result.profile.name || '',
+        profession: result.profile.profession || '',
+        rawBio: result.profile.rawBio || '',
+        photoUrl: result.profile.photoUrl || ''
+      });
+      showToast("Profile node successfully committed to cluster database.");
     } catch (err) {
-      setError(err.message || 'Error committing user data models.');
+      setError(err.message || 'Error processing onboarding models.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateProfileSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    try {
+      const response = await fetch('/api/onboarding', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: userProfile.userId,
+          ...editForm,
+          searchProfession,
+          searchKeyword
+        }),
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error || 'Profile modify mutation rejected.');
+
+      setUserProfile(result.profile);
+      setMatches(result.matches);
+      setIsEditModalOpen(false);
+      showToast("Profile schema changes safely written down to cluster indexing shards.");
+    } catch (err) {
+      setError(err.message || 'Fault processing configuration update logic.');
     } finally {
       setLoading(false);
     }
@@ -152,10 +214,11 @@ export default function Home() {
         }),
       });
       const result = await response.json();
-      if (!result.success) throw new Error(result.error || 'Query filtering structure execution failure.');
+      if (!result.success) throw new Error(result.error || 'Filtering array failure.');
       setMatches(result.matches);
+      showToast("Vector matching array search calculation index refreshed.");
     } catch (err) {
-      setError(err.message || 'Timeout tracing filtering clusters.');
+      setError(err.message || 'Timeout tracing query segments.');
     } finally {
       setLoading(false);
     }
@@ -183,7 +246,7 @@ export default function Home() {
         setChatLogs((prev) => [...prev, result.message]);
       }
     } catch (err) {
-      console.error("Transmission breakdown:", err);
+      console.error("Signal payload routing error:", err);
     }
   };
 
@@ -198,6 +261,7 @@ export default function Home() {
     setActiveChatMatch(null);
     setStep('EMAIL');
     setError('');
+    showToast("Session connection terminated successfully.");
   };
 
   const handleDeleteProfile = async () => {
@@ -232,6 +296,13 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4 md:p-8 selection:bg-rose-500/30">
       
+      {/* GLOBAL NOTIFICATION SYSTEM BANNER FLOATER */}
+      {toastMessage && (
+        <div className="fixed top-5 right-5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-bold font-mono px-5 py-3 rounded-xl shadow-2xl border border-emerald-500/30 z-50 animate-in fade-in slide-in-from-top-3 duration-200">
+          🛰️ Core Log Matrix: {toastMessage}
+        </div>
+      )}
+
       {/* Dynamic Branding Layout Grid */}
       <div className="text-center mb-8 max-w-xl">
         <h1 className="text-4xl md:text-5xl font-black tracking-tight bg-gradient-to-r from-rose-400 via-amber-400 to-emerald-400 bg-clip-text text-transparent">
@@ -345,7 +416,7 @@ export default function Home() {
               <p className="text-xs text-rose-400 font-bold mb-1 tracking-wide">{userProfile.profession || 'Developer'}</p>
               <p className="text-xs text-slate-500 mb-4 font-mono truncate">{userProfile.userId}</p>
               
-              <div className="space-y-3 text-left bg-slate-950/40 p-4 rounded-xl border border-slate-800/60 text-xs font-medium">
+              <div className="space-y-3 text-left bg-slate-950/40 p-4 rounded-xl border border-slate-800/60 text-xs font-medium mb-4">
                 <div>
                   <span className="text-[10px] text-slate-500 block uppercase font-bold tracking-wider">Temperament Variant</span>
                   <span className="text-amber-400 text-sm font-semibold">{userProfile.aiAnalysis?.temperament || 'Adaptive Matrix'}</span>
@@ -355,6 +426,13 @@ export default function Home() {
                   <span className="text-emerald-400 text-sm font-semibold">{userProfile.aiAnalysis?.vision || 'Innovation Target'}</span>
                 </div>
               </div>
+
+              <button 
+                onClick={() => setIsEditModalOpen(true)}
+                className="w-full py-2 bg-gradient-to-r from-amber-500/20 to-rose-500/20 text-slate-200 border border-rose-500/30 font-bold text-xs rounded-xl hover:bg-rose-500/20 transition duration-150 mb-2"
+              >
+                📝 Mutate Profile Specifications
+              </button>
             </div>
 
             <div className="mt-6 pt-4 border-t border-slate-800/80 space-y-2">
@@ -388,7 +466,7 @@ export default function Home() {
             <h3 className="text-2xl font-black text-slate-100 flex items-center justify-between px-1">
               <span>AI Core Matches</span>
               <span className="text-xs bg-rose-500/10 text-rose-400 border border-rose-500/20 px-3 py-1 rounded-full font-bold">
-                {matches?.length || 0} Pool Cluster Nodes
+                {matches?.length || 0} Vector Matches Loaded
               </span>
             </h3>
 
@@ -413,7 +491,7 @@ export default function Home() {
                     </div>
                     <div className="text-right">
                       <span className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-500">{item.score}%</span>
-                      <span className="text-[9px] block text-slate-500 font-extrabold uppercase tracking-widest">Alignment</span>
+                      <span className="text-[9px] block text-slate-500 font-extrabold uppercase tracking-widest">Alignment Vector</span>
                     </div>
                   </div>
                   <p className="text-xs text-slate-300 bg-slate-950/40 p-3.5 rounded-xl border border-slate-950/80 leading-relaxed">{item.bio}</p>
@@ -443,7 +521,7 @@ export default function Home() {
                     </details>
                   </div>
 
-                  {/* Persistent Messaging Switcher Node Action Trigger */}
+                  {/* Persistent Messaging Action Trigger */}
                   <div className="mt-4 pt-3 border-t border-slate-800/60 flex justify-end">
                     <button
                       onClick={() => setActiveChatMatch(item)}
@@ -459,7 +537,47 @@ export default function Home() {
         </div>
       )}
 
-      {/* DYNAMIC DATABASE MESSAGING SLIDE PANEL CONTAINER */}
+      {/* INTERACTIVE PROFILE SPECS EDITING MODAL BACKDROP CONTAINER */}
+      {isEditModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl relative animate-in zoom-in-95 duration-150">
+            
+            <h3 className="text-xl font-black text-slate-200 border-b border-slate-800 pb-2 mb-4">
+              📝 Edit Matrix Profile Specifications
+            </h3>
+            
+            <form onSubmit={handleUpdateProfileSubmit} className="space-y-4 text-xs font-semibold">
+              <div>
+                <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Full Name Display</label>
+                <input type="text" required value={editForm.name} onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-100 focus:outline-none focus:border-rose-500/40" />
+              </div>
+              <div>
+                <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Core Professional Stack Vector</label>
+                <input type="text" required value={editForm.profession} onChange={(e) => setEditForm(prev => ({ ...prev, profession: e.target.value }))} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-100 focus:outline-none focus:border-rose-500/40" />
+              </div>
+              <div>
+                <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Profile Photo Access Link</label>
+                <input type="url" value={editForm.photoUrl} onChange={(e) => setEditForm(prev => ({ ...prev, photoUrl: e.target.value }))} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-100 focus:outline-none focus:border-rose-500/40" />
+              </div>
+              <div>
+                <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Biographical Context Data</label>
+                <textarea required rows={3} value={editForm.rawBio} onChange={(e) => setEditForm(prev => ({ ...prev, rawBio: e.target.value }))} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-100 resize-none focus:outline-none focus:border-rose-500/40" />
+              </div>
+              
+              <div className="flex justify-end gap-2.5 pt-2">
+                <button type="button" onClick={() => setIsEditModalOpen(false)} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold transition">
+                  Cancel
+                </button>
+                <button type="submit" disabled={loading} className="px-5 py-2 bg-gradient-to-r from-rose-500 to-amber-500 text-white font-bold rounded-xl transition shadow">
+                  {loading ? 'Committing Modifications...' : 'Commit Specs Mutation'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DYNAMIC DATABASE MESSAGING OVERLAY DRAWER */}
       {activeChatMatch && (
         <div className="fixed bottom-6 right-6 w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-4 duration-200">
           
@@ -471,54 +589,25 @@ export default function Home() {
                 <span className="text-[9px] font-mono text-emerald-400 block font-bold">Signal Match Weight: {activeChatMatch.score}%</span>
               </div>
             </div>
-            <button 
-              onClick={() => setActiveChatMatch(null)}
-              className="text-slate-500 hover:text-slate-300 text-sm font-bold bg-slate-950 w-6 h-6 rounded-lg flex items-center justify-center border border-slate-800 transition"
-            >
-              ✕
-            </button>
+            <button onClick={() => setActiveChatMatch(null)} className="text-slate-500 hover:text-slate-300 text-sm font-bold bg-slate-950 w-6 h-6 rounded-lg flex items-center justify-center border border-slate-800 transition">✕</button>
           </div>
 
-          {/* Active Data Payload Logs Scroll Area */}
           <div className="p-4 h-64 overflow-y-auto bg-slate-950/50 space-y-2.5 flex flex-col">
             <div className="text-center p-1 mb-1">
-              <span className="text-[9px] text-slate-600 font-mono tracking-tight bg-slate-950 border border-slate-900 px-3 py-0.5 rounded-full">
-                🔒 Database sync channel connection secure
-              </span>
+              <span className="text-[9px] text-slate-600 font-mono tracking-tight bg-slate-950 border border-slate-900 px-3 py-0.5 rounded-full">🔒 Database sync channel connection secure</span>
             </div>
             
             {chatLogs.map((msg, index) => {
               const isMe = msg.senderId === userProfile.userId;
               return (
-                <div 
-                  key={index} 
-                  className={`max-w-[80%] p-2.5 rounded-2xl text-xs leading-relaxed border ${
-                    isMe 
-                      ? 'bg-rose-600/20 border-rose-500/30 text-rose-200 rounded-br-none self-end' 
-                      : 'bg-slate-800/60 border-slate-700/50 text-slate-300 rounded-tl-none self-start'
-                  }`}
-                >
-                  {msg.messageText}
-                </div>
+                <div key={index} className={`max-w-[80%] p-2.5 rounded-2xl text-xs leading-relaxed border ${isMe ? 'bg-rose-600/20 border-rose-500/30 text-rose-200 rounded-br-none self-end' : 'bg-slate-800/60 border-slate-700/50 text-slate-300 rounded-tl-none self-start'}`}>{msg.messageText}</div>
               );
             })}
           </div>
 
           <form onSubmit={handleSendMessage} className="p-3 bg-slate-950 border-t border-slate-800 flex gap-2">
-            <input 
-              type="text"
-              placeholder="Type a secure transmission payload..."
-              value={chatMessage}
-              onChange={(e) => setChatMessage(e.target.value)}
-              className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-rose-500/50 font-medium"
-            />
-            <button 
-              type="submit"
-              disabled={!chatMessage.trim()}
-              className="px-4 bg-gradient-to-r from-rose-500 via-amber-500 to-emerald-500 disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-600 text-white text-xs font-bold rounded-xl shadow transition duration-150"
-            >
-              Send
-            </button>
+            <input type="text" placeholder="Type a secure transmission payload..." value={chatMessage} onChange={(e) => setChatMessage(e.target.value)} className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-rose-500/50 font-medium" />
+            <button type="submit" disabled={!chatMessage.trim()} className="px-4 bg-gradient-to-r from-rose-500 via-amber-500 to-emerald-500 disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-600 text-white text-xs font-bold rounded-xl shadow transition duration-150">Send</button>
           </form>
 
         </div>

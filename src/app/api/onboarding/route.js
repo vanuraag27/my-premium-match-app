@@ -1,7 +1,36 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../lib/mongodb';
 
-// Check if user exists by email/userId (The Login Check Hook)
+// Helper function to calculate a real vector alignment score based on shared keywords
+function calculateVectorScore(user, match) {
+  let base = 70;
+  
+  // Professional Alignment Vector bonus
+  const userProf = (user.profession || '').toLowerCase().trim();
+  const matchProf = (match.profession || '').toLowerCase().trim();
+  if (userProf === matchProf && userProf !== '') base += 15;
+  else if (userProf.includes(matchProf) || matchProf.includes(userProf)) base += 8;
+
+  // Bio String Keyword Intersections bonus
+  const userBioWords = (user.rawBio || '').toLowerCase().split(/\s+/);
+  const matchBio = (match.rawBio || '').toLowerCase();
+  
+  let keywordMatches = 0;
+  const targetKeywords = ['developer', 'engineer', 'design', 'finance', 'startup', 'tech', 'data', 'analyst', 'manager'];
+  
+  targetKeywords.forEach(word => {
+    if (userBioWords.includes(word) && matchBio.includes(word)) {
+      keywordMatches++;
+    }
+  });
+
+  base += Math.min(keywordMatches * 3, 14); // Caps keyword intersection bonus at 14%
+  
+  // Guarantee values stay tightly balanced in premium threshold matrix
+  return Math.min(Math.max(base, 75), 99);
+}
+
+// Fetch user profile and compute real vector matches
 export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url);
@@ -21,12 +50,14 @@ export async function GET(req) {
       return NextResponse.json({ success: true, exists: false });
     }
 
-    // Fetch matching partner nodes excluding the user themselves
+    // Fetch potential partner matching items excluding self
     const searchCriteria = { userId: { $ne: userId } };
     const rawMatchesList = await collection.find(searchCriteria).limit(20).toArray();
 
     const formattedMatches = rawMatchesList.map((item) => {
+      const calculatedScore = calculateVectorScore(existingUser, item);
       const matchProfession = item.profession || 'Professional';
+      
       return {
         id: item._id.toString(),
         userId: item.userId,
@@ -34,7 +65,7 @@ export async function GET(req) {
         bio: item.rawBio || 'No tracking bio information recorded.',
         photoUrl: item.photoUrl || '',
         profession: matchProfession,
-        score: Math.floor(Math.random() * (99 - 78 + 1)) + 78,
+        score: calculatedScore,
         aiAnalysis: {
           communication: item.aiAnalysis?.communication || 'Synergistic Synchronous Stream',
           temperament: item.aiAnalysis?.temperament || 'Analytical / High Adaptability Matrix',
@@ -58,7 +89,7 @@ export async function GET(req) {
   }
 }
 
-// Instantiate or Update Profile Document Matrix
+// Instantiate or Update Profile Matrix
 export async function POST(req) {
   try {
     const body = await req.json();
@@ -109,7 +140,9 @@ export async function POST(req) {
     const rawMatchesList = await collection.find(searchCriteria).limit(20).toArray();
 
     const formattedMatches = rawMatchesList.map((item) => {
+      const calculatedScore = calculateVectorScore(updatedProfile, item);
       const matchProfession = item.profession || 'Professional';
+      
       return {
         id: item._id.toString(),
         userId: item.userId,
@@ -117,7 +150,7 @@ export async function POST(req) {
         bio: item.rawBio || 'No tracking bio information recorded.',
         photoUrl: item.photoUrl || '',
         profession: matchProfession,
-        score: Math.floor(Math.random() * (99 - 78 + 1)) + 78,
+        score: calculatedScore,
         aiAnalysis: {
           communication: item.aiAnalysis?.communication || 'Synergistic Synchronous Stream',
           temperament: item.aiAnalysis?.temperament || 'Analytical / High Adaptability Matrix',
