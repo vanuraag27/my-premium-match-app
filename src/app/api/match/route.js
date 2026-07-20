@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/generative-ai";
 
-// Initialize the Google Gen AI client using your Vercel Environment Variable
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+// Force Next.js to treat this purely as an API endpoint, preventing static build pre-rendering
+export const dynamic = 'force-dynamic';
 
 export async function POST(req) {
   try {
+    // Initialize the AI client INSIDE the request function so it scales safely on Vercel
+    const ai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "fallback_key");
+
     // 1. Parse the incoming profiles from the request body
     const { currentUser, targetUser } = await req.json();
 
@@ -16,10 +19,10 @@ export async function POST(req) {
       );
     }
 
-    // 2. Select the fast, smart model optimal for text analysis
+    // 2. Target the smart model
     const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-    // 3. Construct a strictly structured engineering prompt
+    // 3. Construct the matching framework prompt
     const prompt = `
       You are the core matchmaking engine for "Bandhan", a premium matrimonial website.
       Analyze the compatibility between these two individuals:
@@ -40,19 +43,18 @@ export async function POST(req) {
       1. "compatibilityScore": An integer between 0 and 100 representing their match score.
       2. "reasoning": A 2-sentence warm, encouraging summary highlighting shared values/interests or potential hurdles.
 
-      Return ONLY raw, parseable JSON. Do not include markdown code block formatting (like \`\`\`json).
+      Return ONLY raw, parseable JSON. Do not include markdown code block formatting.
     `;
 
     // 4. Request the analysis from Gemini
     const result = await model.generateContent(prompt);
     const responseText = result.response.text().trim();
 
-    // 5. Parse out the structured data
+    // 5. Cleanly parse the JSON return
     let matchData;
     try {
       matchData = JSON.parse(responseText);
     } catch (parseError) {
-      // Fallback if the model accidentally returns wrapper text or code fences
       const cleanJson = responseText.replace(/```json|```/g, "").trim();
       matchData = JSON.parse(cleanJson);
     }
