@@ -1,39 +1,63 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function Home() {
-  // Main state control flow layout parameters
+  // Authentication & Session States
   const [userProfile, setUserProfile] = useState(null);
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
-  // Dynamic Authentication Multi-Step Control states
-  const [step, setStep] = useState('EMAIL'); // States: 'EMAIL', 'OTP', 'REGISTER'
+  // Multiphase Navigation Step Switcher Matrix
+  const [step, setStep] = useState('EMAIL'); // 'EMAIL', 'OTP', 'REGISTER'
   const [inputEmail, setInputEmail] = useState('');
   const [otpCode, setOtpCode] = useState('');
 
-  // Search parameters state matrix variables
+  // Filtering Options Matrix Parameter State
   const [searchProfession, setSearchProfession] = useState('');
   const [searchKeyword, setSearchKeyword] = useState('');
 
-  // Registration profile buffer state parameters
+  // Buffered Registration Onboarding Object Fields
   const [registerForm, setRegisterForm] = useState({
     name: '',
+    profession: '',
     rawBio: '',
     photoUrl: ''
   });
 
-  // Dynamic Real-Time Chat System State Tracking
+  // Database-Backed Chat Engine System States
   const [activeChatMatch, setActiveChatMatch] = useState(null);
   const [chatMessage, setChatMessage] = useState('');
+  const [chatLogs, setChatLogs] = useState([]);
 
-  // Step 1: Send OTP to target user email box
+  // Loop to pull chat history automatically if communication channel stays open
+  useEffect(() => {
+    let internalTimer;
+    if (userProfile?.userId && activeChatMatch?.userId) {
+      const loadMessages = async () => {
+        try {
+          const res = await fetch(`/api/messages?senderId=${encodeURIComponent(userProfile.userId)}&receiverId=${encodeURIComponent(activeChatMatch.userId)}`);
+          const data = await res.json();
+          if (data.success) {
+            setChatLogs(data.messages);
+          }
+        } catch (err) {
+          console.error("Failed syncing chat matrix records:", err);
+        }
+      };
+
+      loadMessages();
+      internalTimer = setInterval(loadMessages, 3500); // Live poll sync updates every 3.5s
+    } else {
+      setChatLogs([]);
+    }
+    return () => clearInterval(internalTimer);
+  }, [activeChatMatch, userProfile]);
+
   const handleRequestOtp = async (e) => {
     e.preventDefault();
     if (!inputEmail) return;
-    
     setLoading(true);
     setError('');
 
@@ -43,19 +67,16 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: inputEmail.trim() }),
       });
-
       const result = await response.json();
-      if (!result.success) throw new Error(result.error || 'SMTP routing failure');
-
+      if (!result.success) throw new Error(result.error || 'OTP dispatch routing error.');
       setStep('OTP');
     } catch (err) {
-      setError(err.message || 'Error processing validation token request.');
+      setError(err.message || 'Error processing system gateway token verification.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Step 2: Validate OTP Token Pin and route user based on account records
   const handleVerifyOtp = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -67,14 +88,13 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: inputEmail.trim(), otpToken: otpCode }),
       });
-
       const verifyResult = await verifyResponse.json();
-      if (!verifyResult.success) throw new Error(verifyResult.error || 'Invalid credential code token entries.');
+      if (!verifyResult.success) throw new Error(verifyResult.error || 'Authentication credential failure.');
 
       const profileCheckResponse = await fetch(`/api/onboarding?userId=${encodeURIComponent(inputEmail.trim())}`);
       const checkResult = await profileCheckResponse.json();
 
-      if (!checkResult.success) throw new Error(checkResult.error || 'Database check anomaly.');
+      if (!checkResult.success) throw new Error(checkResult.error || 'Profile structure sync exception.');
 
       if (checkResult.exists) {
         setUserProfile(checkResult.profile);
@@ -83,13 +103,12 @@ export default function Home() {
         setStep('REGISTER');
       }
     } catch (err) {
-      setError(err.message || 'Error executing gateway handshake sequences.');
+      setError(err.message || 'Gateway operational breakdown.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Step 3: Complete initial entry submission if user record is clean
   const handleRegisterProfileSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -104,24 +123,21 @@ export default function Home() {
           ...registerForm
         }),
       });
-
       const result = await response.json();
-      if (!result.success) throw new Error(result.error || 'Profile generation cluster rejected.');
+      if (!result.success) throw new Error(result.error || 'Registration write operation rejected.');
 
       setUserProfile(result.profile);
       setMatches(result.matches);
     } catch (err) {
-      setError(err.message || 'Error saving profile core metadata down to cluster index.');
+      setError(err.message || 'Error committing user data models.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Run dynamic queries back across the collection partitions
   const handleApplyFilters = async (e) => {
     if (e) e.preventDefault();
     if (!userProfile?.userId) return;
-
     setLoading(true);
     setError('');
 
@@ -135,27 +151,40 @@ export default function Home() {
           searchKeyword
         }),
       });
-
       const result = await response.json();
-      if (!result.success) throw new Error(result.error || 'Filtering matrix operation fault.');
-
+      if (!result.success) throw new Error(result.error || 'Query filtering structure execution failure.');
       setMatches(result.matches);
     } catch (err) {
-      setError(err.message || 'Query execution timeout anomaly.');
+      setError(err.message || 'Timeout tracing filtering clusters.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Chat message simulator logic handler
-  const handleSendMessage = (e) => {
+  const handleSendMessage = async (e) => {
     e.preventDefault();
-    if (!chatMessage.trim()) return;
-    
-    console.log(`📡 Signal payload routed to match identity path: ${activeChatMatch.id}`);
-    console.log(`💬 Transmission message content payload: "${chatMessage}"`);
-    
+    if (!chatMessage.trim() || !userProfile?.userId || !activeChatMatch?.userId) return;
+
+    const textToSend = chatMessage.trim();
     setChatMessage('');
+
+    try {
+      const response = await fetch('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          senderId: userProfile.userId,
+          receiverId: activeChatMatch.userId,
+          messageText: textToSend
+        }),
+      });
+      const result = await response.json();
+      if (result.success) {
+        setChatLogs((prev) => [...prev, result.message]);
+      }
+    } catch (err) {
+      console.error("Transmission breakdown:", err);
+    }
   };
 
   const handleLogOut = () => {
@@ -163,7 +192,7 @@ export default function Home() {
     setMatches([]);
     setInputEmail('');
     setOtpCode('');
-    setRegisterForm({ name: '', rawBio: '', photoUrl: '' });
+    setRegisterForm({ name: '', profession: '', rawBio: '', photoUrl: '' });
     setSearchProfession('');
     setSearchKeyword('');
     setActiveChatMatch(null);
@@ -174,7 +203,6 @@ export default function Home() {
   const handleDeleteProfile = async () => {
     if (!userProfile?.userId) return;
     if (!window.confirm("Permanently wipe profile records from database?")) return;
-
     setLoading(true);
     setError('');
 
@@ -182,10 +210,8 @@ export default function Home() {
       const response = await fetch(`/api/onboarding?userId=${encodeURIComponent(userProfile.userId)}`, {
         method: 'DELETE',
       });
-
       const result = await response.json();
       if (!result.success) throw new Error(result.error || 'Server rejection.');
-
       handleLogOut();
       alert("Profile node elements completely cleared from cluster database.");
     } catch (err) {
@@ -206,6 +232,7 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4 md:p-8 selection:bg-rose-500/30">
       
+      {/* Dynamic Branding Layout Grid */}
       <div className="text-center mb-8 max-w-xl">
         <h1 className="text-4xl md:text-5xl font-black tracking-tight bg-gradient-to-r from-rose-400 via-amber-400 to-emerald-400 bg-clip-text text-transparent">
           Bandhan Matrix Engine
@@ -219,7 +246,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* CONDITIONAL GATEWAY FLOW HANDLER */}
+      {/* STEP CONFIGURATOR ROUTING GATEWAY MODAL */}
       {!userProfile && (
         <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 md:p-8 shadow-2xl">
           
@@ -254,25 +281,30 @@ export default function Home() {
           )}
 
           {step === 'REGISTER' && (
-            <form onSubmit={handleRegisterProfileSubmit} className="space-y-5">
+            <form onSubmit={handleRegisterProfileSubmit} className="space-y-4">
               <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-xs text-amber-400 font-medium text-center">
                 ✨ Account node mapping entry clean. Finish setting up profile data.
               </div>
-              <h2 className="text-xl font-bold text-slate-200 border-b border-slate-800 pb-2">Complete Profiles Setup</h2>
+              <h2 className="text-xl font-bold text-slate-200 border-b border-slate-800 pb-2">Complete Profile Setup</h2>
               
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 <label className="text-xs uppercase font-extrabold text-slate-400 block">Full Name</label>
-                <input type="text" required placeholder="Display Name String" value={registerForm.name} onChange={(e) => setRegisterForm(prev => ({ ...prev, name: e.target.value }))} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-sm focus:outline-none focus:border-rose-500/50" />
+                <input type="text" required placeholder="Display Name String" value={registerForm.name} onChange={(e) => setRegisterForm(prev => ({ ...prev, name: e.target.value }))} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-rose-500/50" />
               </div>
 
-              <div className="space-y-1.5">
+              <div className="space-y-1">
+                <label className="text-xs uppercase font-extrabold text-slate-400 block">Core Profession</label>
+                <input type="text" required placeholder="e.g. Software Engineer, Analyst" value={registerForm.profession} onChange={(e) => setRegisterForm(prev => ({ ...prev, profession: e.target.value }))} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-rose-500/50" />
+              </div>
+
+              <div className="space-y-1">
                 <label className="text-xs uppercase font-extrabold text-slate-400 block">Photo URL Link</label>
-                <input type="url" placeholder="Paste image share address string" value={registerForm.photoUrl} onChange={(e) => setRegisterForm(prev => ({ ...prev, photoUrl: e.target.value }))} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-sm focus:outline-none focus:border-rose-500/50" />
+                <input type="url" placeholder="Paste image share address string" value={registerForm.photoUrl} onChange={(e) => setRegisterForm(prev => ({ ...prev, photoUrl: e.target.value }))} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-rose-500/50" />
               </div>
 
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 <label className="text-xs uppercase font-extrabold text-slate-400 block">Character Target Bio</label>
-                <textarea required rows={4} placeholder="Express traits, occupation context or core vision variables..." value={registerForm.rawBio} onChange={(e) => setRegisterForm(prev => ({ ...prev, rawBio: e.target.value }))} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-sm resize-none focus:outline-none focus:border-rose-500/50" />
+                <textarea required rows={3} placeholder="Express traits, occupation context or core vision variables..." value={registerForm.rawBio} onChange={(e) => setRegisterForm(prev => ({ ...prev, rawBio: e.target.value }))} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm resize-none focus:outline-none focus:border-rose-500/50" />
               </div>
 
               <button type="submit" disabled={loading} className="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-sm rounded-xl transition">
@@ -284,16 +316,18 @@ export default function Home() {
         </div>
       )}
 
-      {/* DASHBOARD RENDER CLUSTER ZONE */}
+      {/* CORE GRAPHICAL DASHBOARD COMPONENT MATRIX LAYER */}
       {userProfile && (
         <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-3 gap-6">
+          
+          {/* User Profile Metrics Display Drawer */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 h-fit flex flex-col justify-between shadow-xl">
             <div>
               {userProfile.photoUrl ? (
                 <img 
                   src={getDirectDriveUrl(userProfile.photoUrl)} 
                   alt={userProfile.name} 
-                  className="w-24 h-24 rounded-full object-cover border-2 border-rose-500 mb-4 mx-auto md:mx-0" 
+                  className="w-24 h-24 rounded-full object-cover border-2 border-rose-500 mb-4 mx-auto md:mx-0 shadow-lg" 
                   onError={(e) => {
                     e.target.onerror = null;
                     e.target.style.display = 'none';
@@ -308,6 +342,7 @@ export default function Home() {
               )}
               
               <h3 className="text-xl font-black text-white truncate">{userProfile.name}</h3>
+              <p className="text-xs text-rose-400 font-bold mb-1 tracking-wide">{userProfile.profession || 'Developer'}</p>
               <p className="text-xs text-slate-500 mb-4 font-mono truncate">{userProfile.userId}</p>
               
               <div className="space-y-3 text-left bg-slate-950/40 p-4 rounded-xl border border-slate-800/60 text-xs font-medium">
@@ -332,15 +367,18 @@ export default function Home() {
             </div>
           </div>
 
+          {/* Matches Workspace Core Stream */}
           <div className="md:col-span-2 space-y-4">
+            
+            {/* Real-time Cluster Query Interface Box */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-md flex flex-col sm:flex-row gap-3 items-end">
               <div className="w-full sm:w-1/2 space-y-1">
                 <label className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Filter by Profession</label>
-                <input type="text" placeholder="e.g. Engineer, Doctor" value={searchProfession} onChange={(e) => setSearchProfession(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none" />
+                <input type="text" placeholder="e.g. Engineer, Designer" value={searchProfession} onChange={(e) => setSearchProfession(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-rose-500/30" />
               </div>
               <div className="w-full sm:w-1/2 space-y-1">
                 <label className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Keyword Search</label>
-                <input type="text" placeholder="Search names or bio details..." value={searchKeyword} onChange={(e) => setSearchKeyword(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none" />
+                <input type="text" placeholder="Search names or bio details..." value={searchKeyword} onChange={(e) => setSearchKeyword(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-rose-500/30" />
               </div>
               <button onClick={handleApplyFilters} disabled={loading} className="w-full sm:w-auto px-5 py-2 bg-gradient-to-r from-rose-500 to-amber-500 text-white font-bold text-xs rounded-xl shadow transition whitespace-nowrap disabled:opacity-50">
                 {loading ? 'Filtering...' : 'Apply Filters'}
@@ -360,31 +398,31 @@ export default function Home() {
               </div>
             ) : (
               matches.map((item) => (
-                <div key={item.id} className="bg-slate-900 border border-slate-800/80 rounded-2xl p-5 shadow-md">
+                <div key={item.id} className="bg-slate-900 border border-slate-800/80 rounded-2xl p-5 shadow-md hover:border-slate-700 transition duration-200">
                   <div className="flex items-start justify-between gap-4 mb-3">
                     <div className="flex items-center gap-3.5">
                       {item.photoUrl ? (
-                        <img src={getDirectDriveUrl(item.photoUrl)} alt={item.name} className="w-12 h-12 rounded-full object-cover border border-slate-700 bg-slate-950" onError={(e) => { e.target.onerror = null; e.target.src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=80&h=80&q=80'; }} />
+                        <img src={getDirectDriveUrl(item.photoUrl)} alt={item.name} className="w-12 h-12 rounded-full object-cover border border-slate-700 bg-slate-950 shadow" onError={(e) => { e.target.onerror = null; e.target.src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=80&h=80&q=80'; }} />
                       ) : (
                         <div className="w-12 h-12 rounded-full bg-slate-950 border border-slate-800 flex items-center justify-center text-slate-600 font-bold text-xs font-mono">AI</div>
                       )}
                       <div>
                         <h4 className="text-md font-bold text-slate-100 tracking-tight">{item.name}</h4>
-                        <p className="text-xs text-slate-400 italic">Style: {item.aiAnalysis?.communication || 'Synergistic'}</p>
+                        <p className="text-xs text-amber-400 font-semibold">{item.profession || 'Partner'}</p>
                       </div>
                     </div>
                     <div className="text-right">
                       <span className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-500">{item.score}%</span>
-                      <span className="text-[9px] block text-slate-500 font-extrabold uppercase tracking-widest">Weight</span>
+                      <span className="text-[9px] block text-slate-500 font-extrabold uppercase tracking-widest">Alignment</span>
                     </div>
                   </div>
                   <p className="text-xs text-slate-300 bg-slate-950/40 p-3.5 rounded-xl border border-slate-950/80 leading-relaxed">{item.bio}</p>
                   
-                  {/* Secure Signal Messaging Trigger */}
+                  {/* Persistent Messaging Switcher Node Action Trigger */}
                   <div className="mt-4 pt-3 border-t border-slate-800/60 flex justify-end">
                     <button
                       onClick={() => setActiveChatMatch(item)}
-                      className="px-4 py-1.5 bg-slate-950 hover:bg-rose-500/10 border border-slate-800 text-slate-300 hover:text-rose-400 font-bold text-xs rounded-xl shadow transition duration-150"
+                      className="px-4 py-1.5 bg-slate-950 hover:bg-emerald-500/10 border border-slate-800 text-slate-300 hover:text-emerald-400 font-bold text-xs rounded-xl shadow transition duration-150"
                     >
                       💬 Open Secure Signal Route
                     </button>
@@ -396,7 +434,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* DYNAMIC REAL-TIME CHAT PANEL OVERLAY CONTAINER */}
+      {/* DYNAMIC DATABASE MESSAGING SLIDE PANEL CONTAINER */}
       {activeChatMatch && (
         <div className="fixed bottom-6 right-6 w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-4 duration-200">
           
@@ -405,7 +443,7 @@ export default function Home() {
               <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse" />
               <div>
                 <h4 className="text-xs font-black text-slate-200 tracking-wide truncate max-w-[180px]">{activeChatMatch.name}</h4>
-                <span className="text-[9px] font-mono text-rose-400/80 uppercase tracking-widest block font-bold">Signal Match: {activeChatMatch.score}%</span>
+                <span className="text-[9px] font-mono text-emerald-400 block font-bold">Signal Match Weight: {activeChatMatch.score}%</span>
               </div>
             </div>
             <button 
@@ -416,30 +454,43 @@ export default function Home() {
             </button>
           </div>
 
-          <div className="p-4 h-64 overflow-y-auto bg-slate-950/50 space-y-3 flex flex-col justify-end">
-            <div className="text-center p-2">
-              <span className="text-[10px] text-slate-600 font-mono tracking-tight bg-slate-950 border border-slate-900 px-3 py-1 rounded-full">
-                🔒 Encrypted cluster handshake initialized safely
+          {/* Active Data Payload Logs Scroll Area */}
+          <div className="p-4 h-64 overflow-y-auto bg-slate-950/50 space-y-2.5 flex flex-col">
+            <div className="text-center p-1 mb-1">
+              <span className="text-[9px] text-slate-600 font-mono tracking-tight bg-slate-950 border border-slate-900 px-3 py-0.5 rounded-full">
+                🔒 Database sync channel connection secure
               </span>
             </div>
             
-            <div className="max-w-[80%] bg-slate-800/60 border border-slate-700/50 text-slate-300 p-2.5 rounded-2xl text-xs rounded-tl-none self-start">
-              Hi {userProfile?.name || 'User Node'}! I noticed our AI trajectory vectors align. What framework stack architectures are you compiling today?
-            </div>
+            {chatLogs.map((msg, index) => {
+              const isMe = msg.senderId === userProfile.userId;
+              return (
+                <div 
+                  key={index} 
+                  className={`max-w-[80%] p-2.5 rounded-2xl text-xs leading-relaxed border ${
+                    isMe 
+                      ? 'bg-rose-600/20 border-rose-500/30 text-rose-200 rounded-br-none self-end' 
+                      : 'bg-slate-800/60 border-slate-700/50 text-slate-300 rounded-tl-none self-start'
+                  }`}
+                >
+                  {msg.messageText}
+                </div>
+              );
+            })}
           </div>
 
           <form onSubmit={handleSendMessage} className="p-3 bg-slate-950 border-t border-slate-800 flex gap-2">
             <input 
               type="text"
-              placeholder="Type a secure network transmission..."
+              placeholder="Type a secure transmission payload..."
               value={chatMessage}
               onChange={(e) => setChatMessage(e.target.value)}
-              className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-rose-500/50"
+              className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-rose-500/50 font-medium"
             />
             <button 
               type="submit"
               disabled={!chatMessage.trim()}
-              className="px-4 bg-gradient-to-r from-rose-500 to-amber-500 hover:from-rose-600 disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-600 text-white text-xs font-bold rounded-xl shadow transition"
+              className="px-4 bg-gradient-to-r from-rose-500 via-amber-500 to-emerald-500 disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-600 text-white text-xs font-bold rounded-xl shadow transition duration-150"
             >
               Send
             </button>

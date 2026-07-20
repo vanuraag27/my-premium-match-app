@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../lib/mongodb';
 
-// Phase A: Fetch an already existing user profile by email/userId (The Login Check)
+// Check if user exists by email/userId (The Login Check Hook)
 export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url);
@@ -15,22 +15,23 @@ export async function GET(req) {
     const db = client.db('bandhan-engine');
     const collection = db.collection('users');
 
-    // Look for existing user profile document
     const existingUser = await collection.findOne({ userId: userId });
 
     if (!existingUser) {
       return NextResponse.json({ success: true, exists: false });
     }
 
-    // If they exist, pull their matches pool dynamically right now to log them in completely
+    // Fetch matching partner nodes excluding the user themselves
     const searchCriteria = { userId: { $ne: userId } };
     const rawMatchesList = await collection.find(searchCriteria).limit(20).toArray();
 
     const formattedMatches = rawMatchesList.map((item) => ({
       id: item._id.toString(),
+      userId: item.userId,
       name: item.name || 'Anonymous Node',
       bio: item.rawBio || 'No tracking bio information recorded.',
       photoUrl: item.photoUrl || '',
+      profession: item.profession || 'Professional',
       score: Math.floor(Math.random() * (99 - 78 + 1)) + 78,
       aiAnalysis: item.aiAnalysis || { communication: 'Synergistic Integration' }
     }));
@@ -48,11 +49,11 @@ export async function GET(req) {
   }
 }
 
-// Phase B: Save/Update profile structural data to MongoDB and pull matches
+// Instantiate or Update Profile Document Matrix
 export async function POST(req) {
   try {
     const body = await req.json();
-    const { userId, name, rawBio, photoUrl, searchProfession, searchKeyword } = body;
+    const { userId, name, rawBio, photoUrl, profession, searchProfession, searchKeyword } = body;
 
     if (!userId) {
       return NextResponse.json({ success: false, error: 'Missing active user node identifier.' }, { status: 400 });
@@ -67,6 +68,7 @@ export async function POST(req) {
       name,
       rawBio,
       photoUrl,
+      profession: profession || 'Developer',
       updatedAt: new Date(),
       aiAnalysis: body.aiAnalysis || {
         temperament: 'Adaptive Matrix Vector',
@@ -81,6 +83,7 @@ export async function POST(req) {
       { upsert: true }
     );
 
+    // Build conditional lookup filtering constraints
     let searchCriteria = { userId: { $ne: userId } };
 
     if (searchProfession && searchProfession.trim() !== '') {
@@ -98,9 +101,11 @@ export async function POST(req) {
 
     const formattedMatches = rawMatchesList.map((item) => ({
       id: item._id.toString(),
+      userId: item.userId,
       name: item.name || 'Anonymous Node',
       bio: item.rawBio || 'No tracking bio information recorded.',
       photoUrl: item.photoUrl || '',
+      profession: item.profession || 'Professional',
       score: Math.floor(Math.random() * (99 - 78 + 1)) + 78,
       aiAnalysis: item.aiAnalysis || { communication: 'Synergistic Integration' }
     }));
@@ -118,7 +123,7 @@ export async function POST(req) {
   }
 }
 
-// Phase C: Drop database profile elements via query parameters
+// Wipe user profile metrics completely
 export async function DELETE(req) {
   try {
     const { searchParams } = new URL(req.url);
@@ -131,16 +136,9 @@ export async function DELETE(req) {
     const client = await clientPromise;
     const db = client.db('bandhan-engine');
 
-    const deletionResult = await db.collection('users').deleteMany({
-      $or: [
-        { userId: userId },
-        { email: userId }
-      ]
+    await db.collection('users').deleteMany({
+      $or: [{ userId: userId }, { email: userId }]
     });
-
-    if (deletionResult.deletedCount === 0) {
-      return NextResponse.json({ success: false, error: 'No profile document matched.' }, { status: 404 });
-    }
 
     return NextResponse.json({ success: true, message: 'All matching records successfully wiped out.' });
 
