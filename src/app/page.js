@@ -3,34 +3,32 @@
 import { useState } from 'react';
 
 export default function Home() {
-  // Main app view tracking states
+  // Main state control flow layout parameters
   const [userProfile, setUserProfile] = useState(null);
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
-  // Verification security sequence states
-  const [isOtpStep, setIsOtpStep] = useState(false);
+  // Dynamic Authentication Multi-Step Control states
+  const [step, setStep] = useState('EMAIL'); // States: 'EMAIL', 'OTP', 'REGISTER'
+  const [inputEmail, setInputEmail] = useState('');
   const [otpCode, setOtpCode] = useState('');
-  const [tempPayload, setTempPayload] = useState(null);
 
-  // Profile data capture control
-  const [formData, setFormData] = useState({
-    userId: '',
+  // Search parameters state matrix variables
+  const [searchProfession, setSearchProfession] = useState('');
+  const [searchKeyword, setSearchKeyword] = useState('');
+
+  // Registration profile buffer state parameters
+  const [registerForm, setRegisterForm] = useState({
     name: '',
     rawBio: '',
     photoUrl: ''
   });
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
-
-  // Step 1: Fire token request to the updated auth dispatch route
-  const handleOnboardingSubmit = async (e) => {
+  // Step 1: Send OTP to target user email box
+  const handleRequestOtp = async (e) => {
     e.preventDefault();
-    if (!formData.userId || !formData.name || !formData.rawBio) return;
+    if (!inputEmail) return;
     
     setLoading(true);
     setError('');
@@ -39,72 +37,131 @@ export default function Home() {
       const response = await fetch('/api/auth/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: formData.userId }),
+        body: JSON.stringify({ email: inputEmail.trim() }),
       });
 
       const result = await response.json();
-      if (!result.success) throw new Error(result.error || 'SMTP dispatch failure');
+      if (!result.success) throw new Error(result.error || 'SMTP routing failure');
 
-      setTempPayload(formData);
-      setIsOtpStep(true);
+      setStep('OTP');
     } catch (err) {
-      setError(err.message || 'Error executing secure token request lifecycle.');
+      setError(err.message || 'Error processing validation token request.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Step 2: Validate code against the explicit verification endpoint, then save profile
+  // Step 2: Validate OTP Token Pin and route user based on account records
   const handleVerifyOtp = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
     try {
-      // Phase A: Validate token pin node matrix
+      // Phase A: Assert OTP token matches authorization parameters
       const verifyResponse = await fetch('/api/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: tempPayload.userId, otpToken: otpCode }),
+        body: JSON.stringify({ email: inputEmail.trim(), otpToken: otpCode }),
       });
 
       const verifyResult = await verifyResponse.json();
-      if (!verifyResult.success) throw new Error(verifyResult.error || 'Code verification failed.');
+      if (!verifyResult.success) throw new Error(verifyResult.error || 'Invalid credential code token entries.');
 
-      // Phase B: Pass security clearance and push data to MongoDB
-      const saveResponse = await fetch('/api/onboarding', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(tempPayload),
-      });
+      // Phase B: Fetch account configuration record status straight from MongoDB Atlas
+      const profileCheckResponse = await fetch(`/api/onboarding?userId=${encodeURIComponent(inputEmail.trim())}`);
+      const checkResult = await profileCheckResponse.json();
 
-      const saveResult = await saveResponse.json();
-      if (!saveResult.success) throw new Error(saveResult.error || 'Profile persistence rejected.');
+      if (!checkResult.success) throw new Error(checkResult.error || 'Database check anomaly.');
 
-      setUserProfile(saveResult.profile);
-      setMatches(saveResult.matches);
-      setIsOtpStep(false);
+      if (checkResult.exists) {
+        // User is ALREADY registered -> Auto-populate profile configurations and boot Dashboard directly!
+        setUserProfile(checkResult.profile);
+        setMatches(checkResult.matches);
+      } else {
+        // User is brand new -> Route them directly to fill out onboarding records
+        setStep('REGISTER');
+      }
     } catch (err) {
-      setError(err.message || 'System error validating token code instance.');
+      setError(err.message || 'Error executing gateway handshake sequences.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Lifecycle Options: Disconnect local nodes
+  // Step 3: Complete initial entry submission if user record is clean
+  const handleRegisterProfileSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    try {
+      const response = await fetch('/api/onboarding', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: inputEmail.trim(),
+          ...registerForm
+        }),
+      });
+
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error || 'Profile generation cluster rejected.');
+
+      setUserProfile(result.profile);
+      setMatches(result.matches);
+    } catch (err) {
+      setError(err.message || 'Error saving profile core metadata down to cluster index.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Run dynamic queries back across the collection partitions
+  const handleApplyFilters = async (e) => {
+    if (e) e.preventDefault();
+    if (!userProfile?.userId) return;
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const response = await fetch('/api/onboarding', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...userProfile,
+          searchProfession,
+          searchKeyword
+        }),
+      });
+
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error || 'Filtering matrix operation fault.');
+
+      setMatches(result.matches);
+    } catch (err) {
+      setError(err.message || 'Query execution timeout anomaly.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleLogOut = () => {
     setUserProfile(null);
     setMatches([]);
-    setFormData({ userId: '', name: '', rawBio: '', photoUrl: '' });
-    setTempPayload(null);
-    setIsOtpStep(false);
+    setInputEmail('');
+    setOtpCode('');
+    setRegisterForm({ name: '', rawBio: '', photoUrl: '' });
+    setSearchProfession('');
+    setSearchKeyword('');
+    setStep('EMAIL');
     setError('');
   };
 
-  // Lifecycle Options: Drop database profile node elements completely via DELETE call
   const handleDeleteProfile = async () => {
     if (!userProfile?.userId) return;
-    if (!window.confirm("Are you absolutely sure you want to permanently delete your profile matrix record from MongoDB?")) return;
+    if (!window.confirm("Permanently wipe profile records from database?")) return;
 
     setLoading(true);
     setError('');
@@ -115,26 +172,21 @@ export default function Home() {
       });
 
       const result = await response.json();
-      if (!result.success) throw new Error(result.error || 'Server rejected destruction event pipeline.');
+      if (!result.success) throw new Error(result.error || 'Server rejection.');
 
-      // Clear layout states safely only after explicit backend success approval
       handleLogOut();
-      alert("Success! Your profile node structure has been permanently wiped from the active MongoDB database registry mapping.");
+      alert("Profile node elements completely cleared from cluster database.");
     } catch (err) {
-      setError(err.message || 'Fatal crash executing profile deletion engine pipeline.');
+      setError(err.message || 'Fault processing deletion transaction logic.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Helper utility mapping structure to transform Google Drive viewing link variants to download vectors
   const getDirectDriveUrl = (url) => {
     if (!url) return '';
     if (url.includes('drive.google.com')) {
-      return url
-        .replace('/file/d/', '/uc?export=view&id=')
-        .replace('/view?usp=sharing', '')
-        .replace('/view', '');
+      return url.replace('/file/d/', '/uc?export=view&id=').replace('/view?usp=sharing', '').replace('/view', '');
     }
     return url;
   };
@@ -142,7 +194,6 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4 md:p-8 selection:bg-rose-500/30">
       
-      {/* Visual Header Grid Zone */}
       <div className="text-center mb-8 max-w-xl">
         <h1 className="text-4xl md:text-5xl font-black tracking-tight bg-gradient-to-r from-rose-400 via-amber-400 to-emerald-400 bg-clip-text text-transparent">
           Bandhan Matrix Engine
@@ -151,81 +202,86 @@ export default function Home() {
       </div>
 
       {error && (
-        <div className="w-full max-w-md bg-rose-500/10 border border-rose-500/20 text-rose-400 p-4 rounded-xl text-sm font-semibold mb-6 shadow-sm">
+        <div className="w-full max-w-md bg-rose-500/10 border border-rose-500/20 text-rose-400 p-4 rounded-xl text-sm font-semibold mb-6">
           ⚠️ Operational Exception: {error}
         </div>
       )}
 
-      {/* THREE-PHASE VISUAL SWITCH ENGINE BLOCK */}
-      {!userProfile && !isOtpStep && (
-        /* ================= PHASE 1: INITIAL DATA COLLECTION ================= */
-        <form onSubmit={handleOnboardingSubmit} className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 md:p-8 shadow-2xl space-y-5">
-          <h2 className="text-xl font-bold text-slate-200 border-b border-slate-800 pb-3">Initialize Node Profile</h2>
+      {/* CONDITIONAL GATEWAY FLOW HANDLER */}
+      {!userProfile && (
+        <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 md:p-8 shadow-2xl">
           
-          <div className="space-y-1.5">
-            <label className="text-xs uppercase font-extrabold text-slate-400 block">User Email / ID</label>
-            <input type="email" name="userId" required placeholder="name@domain.com" value={formData.userId} onChange={handleInputChange} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-sm font-mono focus:border-rose-500/50 focus:outline-none" />
-          </div>
+          {step === 'EMAIL' && (
+            <form onSubmit={handleRequestOtp} className="space-y-5">
+              <h2 className="text-xl font-bold text-slate-200 border-b border-slate-800 pb-3">Sign In / Join Gateway</h2>
+              <div className="space-y-1.5">
+                <label className="text-xs uppercase font-extrabold text-slate-400 block">User Email ID</label>
+                <input type="email" required placeholder="name@domain.com" value={inputEmail} onChange={(e) => setInputEmail(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-sm font-mono focus:border-rose-500/50 focus:outline-none" />
+              </div>
+              <button type="submit" disabled={loading} className="w-full py-3 bg-gradient-to-r from-rose-500 to-amber-500 text-white font-bold text-sm rounded-xl transition disabled:opacity-50">
+                {loading ? 'Dispatched Access Arrays...' : 'Send Verification OTP'}
+              </button>
+            </form>
+          )}
 
-          <div className="space-y-1.5">
-            <label className="text-xs uppercase font-extrabold text-slate-400 block">Full Name</label>
-            <input type="text" name="name" required placeholder="Identity Name String" value={formData.name} onChange={handleInputChange} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-sm focus:border-rose-500/50 focus:outline-none" />
-          </div>
+          {step === 'OTP' && (
+            <form onSubmit={handleVerifyOtp} className="space-y-5 text-center">
+              <h2 className="text-xl font-bold text-slate-200">Gateway Token Authentication</h2>
+              <p className="text-xs text-slate-400">Input security code verification matrix pin sent to:</p>
+              <span className="text-rose-400 font-bold font-mono text-xs bg-slate-950 px-3 py-1 rounded-md border border-slate-800">{inputEmail}</span>
+              
+              <input type="text" maxLength={6} required placeholder="******" value={otpCode} onChange={(e) => setOtpCode(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 text-center text-2xl font-black tracking-widest text-emerald-400 focus:outline-none focus:border-emerald-500 font-mono" />
+              
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setStep('EMAIL')} className="w-1/2 py-2.5 bg-slate-800 text-slate-300 rounded-xl text-xs font-bold border border-slate-700 transition hover:bg-slate-700">Back</button>
+                <button type="submit" disabled={loading} className="w-1/2 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition">
+                  {loading ? 'Verifying...' : 'Verify & Continue'}
+                </button>
+              </div>
+            </form>
+          )}
 
-          <div className="space-y-1.5">
-            <label className="text-xs uppercase font-extrabold text-slate-400 block">Google Drive Photo URL</label>
-            <input type="url" name="photoUrl" placeholder="Paste global shared image address link" value={formData.photoUrl} onChange={handleInputChange} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-sm focus:border-rose-500/50 focus:outline-none" />
-          </div>
+          {step === 'REGISTER' && (
+            <form onSubmit={handleRegisterProfileSubmit} className="space-y-5">
+              <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-xs text-amber-400 font-medium text-center">
+                ✨ Account node mapping entry clean. Finish setting up profile data.
+              </div>
+              <h2 className="text-xl font-bold text-slate-200 border-b border-slate-800 pb-2">Complete Profiles Setup</h2>
+              
+              <div className="space-y-1.5">
+                <label className="text-xs uppercase font-extrabold text-slate-400 block">Full Name</label>
+                <input type="text" required placeholder="Display Name String" value={registerForm.name} onChange={(e) => setRegisterForm(prev => ({ ...prev, name: e.target.value }))} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-sm focus:outline-none focus:border-rose-500/50" />
+              </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs uppercase font-extrabold text-slate-400 block">Character Target Bio</label>
-            <textarea name="rawBio" required rows={4} placeholder="Express goals, workspace workflow, traits, or temperament metrics..." value={formData.rawBio} onChange={handleInputChange} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-sm resize-none focus:border-rose-500/50 focus:outline-none" />
-          </div>
+              <div className="space-y-1.5">
+                <label className="text-xs uppercase font-extrabold text-slate-400 block">Photo URL Link</label>
+                <input type="url" placeholder="Paste image share address string" value={registerForm.photoUrl} onChange={(e) => setRegisterForm(prev => ({ ...prev, photoUrl: e.target.value }))} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-sm focus:outline-none focus:border-rose-500/50" />
+              </div>
 
-          <button type="submit" disabled={loading} className="w-full py-3 bg-gradient-to-r from-rose-500 to-amber-500 hover:from-rose-600 text-white font-bold text-sm rounded-xl shadow-lg transition duration-150 disabled:opacity-50">
-            {loading ? 'Dispatched Network SMTP Routing...' : 'Generate Verification OTP'}
-          </button>
-        </form>
+              <div className="space-y-1.5">
+                <label className="text-xs uppercase font-extrabold text-slate-400 block">Character Target Bio</label>
+                <textarea required rows={4} placeholder="Express traits, occupation context or core vision variables..." value={registerForm.rawBio} onChange={(e) => setRegisterForm(prev => ({ ...prev, rawBio: e.target.value }))} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-sm resize-none focus:outline-none focus:border-rose-500/50" />
+              </div>
+
+              <button type="submit" disabled={loading} className="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-sm rounded-xl transition">
+                {loading ? 'Instantiating Profile...' : 'Create Account & Login'}
+              </button>
+            </form>
+          )}
+
+        </div>
       )}
 
-      {!userProfile && isOtpStep && (
-        /* ================= PHASE 2: SECURITY TOKEN CHALLENGE ================= */
-        <form onSubmit={handleVerifyOtp} className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 md:p-8 shadow-2xl space-y-5 text-center">
-          <h2 className="text-xl font-bold text-slate-200">Gateway Token Authentication</h2>
-          <p className="text-xs text-slate-400">Input the 6-digit dynamic cryptographic validation code dispatched to:</p>
-          <span className="text-rose-400 font-bold font-mono text-sm bg-slate-950 px-3 py-1 rounded-md inline-block mt-1 border border-slate-800">{formData.userId}</span>
-          
-          <input 
-            type="text" 
-            maxLength={6}
-            required
-            placeholder="******" 
-            value={otpCode}
-            onChange={(e) => setOtpCode(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 text-center text-2xl font-black tracking-widest text-emerald-400 focus:outline-none focus:border-emerald-500 font-mono"
-          />
-
-          <div className="flex gap-3">
-            <button type="button" onClick={() => setIsOtpStep(false)} className="w-1/2 py-2.5 bg-slate-800 text-slate-300 rounded-xl text-xs font-bold border border-slate-700 transition hover:bg-slate-700">Cancel</button>
-            <button type="submit" disabled={loading} className="w-1/2 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md transition">
-              {loading ? 'Authorizing Identity...' : 'Verify Pin & Sync'}
-            </button>
-          </div>
-        </form>
-      )}
-
+      {/* DASHBOARD RENDER CLUSTER ZONE */}
       {userProfile && (
-        /* ================= PHASE 3: LIVE NODE OPERATIONS CLUSTER VIEW ================= */
         <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-3 gap-6">
-          
-          {/* Dashboard Left Configuration Control Core Card */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 text-center md:text-left h-fit flex flex-col justify-between shadow-xl">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 h-fit flex flex-col justify-between shadow-xl">
             <div>
               {userProfile.photoUrl ? (
                 <img 
                   src={getDirectDriveUrl(userProfile.photoUrl)} 
                   alt={userProfile.name} 
-                  className="w-24 h-24 rounded-full object-cover border-2 border-rose-500 mb-4 mx-auto md:mx-0 shadow-lg" 
+                  className="w-24 h-24 rounded-full object-cover border-2 border-rose-500 mb-4 mx-auto md:mx-0" 
                   onError={(e) => {
                     e.target.onerror = null;
                     e.target.style.display = 'none';
@@ -236,7 +292,7 @@ export default function Home() {
                   }}
                 />
               ) : (
-                <div className="w-24 h-24 rounded-full bg-slate-800 flex items-center justify-center mb-4 mx-auto md:mx-0 text-slate-500 border border-slate-700 text-xs font-bold">NO PICTURE</div>
+                <div className="w-24 h-24 rounded-full bg-slate-800 flex items-center justify-center mb-4 mx-auto md:mx-0 text-slate-500 text-xs font-bold border border-slate-700">NO IMAGE</div>
               )}
               
               <h3 className="text-xl font-black text-white truncate">{userProfile.name}</h3>
@@ -254,19 +310,31 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Lifecycle Account Action Group Triggers */}
             <div className="mt-6 pt-4 border-t border-slate-800/80 space-y-2">
-              <button onClick={handleLogOut} className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl border border-slate-700 transition">
+              <button onClick={handleLogOut} className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition">
                 🚪 Log Off Engine Node
               </button>
-              <button onClick={handleDeleteProfile} disabled={loading} className="w-full py-2.5 bg-rose-950/40 hover:bg-rose-900/40 text-rose-400 text-xs font-bold rounded-xl border border-rose-900/50 transition disabled:opacity-40">
-                {loading ? 'Purging Document...' : '🗑️ Delete Profile Matrix'}
+              <button onClick={handleDeleteProfile} disabled={loading} className="w-full py-2.5 bg-rose-950/40 hover:bg-rose-900/40 text-rose-400 text-xs font-bold rounded-xl border border-rose-900/50 transition">
+                🗑️ Delete Profile Matrix
               </button>
             </div>
           </div>
 
-          {/* Core Matching Structural Alignments Grid List Panel */}
           <div className="md:col-span-2 space-y-4">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-md flex flex-col sm:flex-row gap-3 items-end">
+              <div className="w-full sm:w-1/2 space-y-1">
+                <label className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Filter by Profession</label>
+                <input type="text" placeholder="e.g. Engineer, Doctor" value={searchProfession} onChange={(e) => setSearchProfession(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none" />
+              </div>
+              <div className="w-full sm:w-1/2 space-y-1">
+                <label className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Keyword Search</label>
+                <input type="text" placeholder="Search names or bio details..." value={searchKeyword} onChange={(e) => setSearchKeyword(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none" />
+              </div>
+              <button onClick={handleApplyFilters} disabled={loading} className="w-full sm:w-auto px-5 py-2 bg-gradient-to-r from-rose-500 to-amber-500 text-white font-bold text-xs rounded-xl shadow transition whitespace-nowrap disabled:opacity-50">
+                {loading ? 'Filtering...' : 'Apply Filters'}
+              </button>
+            </div>
+
             <h3 className="text-2xl font-black text-slate-100 flex items-center justify-between px-1">
               <span>AI Core Matches</span>
               <span className="text-xs bg-rose-500/10 text-rose-400 border border-rose-500/20 px-3 py-1 rounded-full font-bold">
@@ -280,19 +348,11 @@ export default function Home() {
               </div>
             ) : (
               matches.map((item) => (
-                <div key={item.id} className="bg-slate-900 border border-slate-800/80 rounded-2xl p-5 shadow-md hover:border-slate-700 transition duration-150">
+                <div key={item.id} className="bg-slate-900 border border-slate-800/80 rounded-2xl p-5 shadow-md">
                   <div className="flex items-start justify-between gap-4 mb-3">
                     <div className="flex items-center gap-3.5">
                       {item.photoUrl ? (
-                        <img 
-                          src={getDirectDriveUrl(item.photoUrl)} 
-                          alt={item.name} 
-                          className="w-12 h-12 rounded-full object-cover border border-slate-700 bg-slate-950 shadow-sm"
-                          onError={(e) => {
-                            e.target.onerror = null;
-                            e.target.src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=80&h=80&q=80';
-                          }}
-                        />
+                        <img src={getDirectDriveUrl(item.photoUrl)} alt={item.name} className="w-12 h-12 rounded-full object-cover border border-slate-700 bg-slate-950" onError={(e) => { e.target.onerror = null; e.target.src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=80&h=80&q=80'; }} />
                       ) : (
                         <div className="w-12 h-12 rounded-full bg-slate-950 border border-slate-800 flex items-center justify-center text-slate-600 font-bold text-xs font-mono">AI</div>
                       )}
@@ -311,7 +371,6 @@ export default function Home() {
               ))
             )}
           </div>
-
         </div>
       )}
     </main>

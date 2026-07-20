@@ -1,131 +1,124 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../lib/mongodb';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// Initialize the Gemini Engine Layer using the stable production model identifier
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-
-export async function POST(req) {
+// Phase A: Fetch an already existing user profile by email/userId (The Login Check)
+export async function GET(req) {
   try {
-    const body = await req.json();
-    console.log("📥 Incoming Onboarding Payload Data:", body); 
+    const { searchParams } = new URL(req.url);
+    const userId = searchParams.get('userId');
 
-    const { userId, name, rawBio, photoUrl } = body;
-
-    // Basic fields validation challenge - tracking explicitly against userId
-    if (!userId || !name || !rawBio) {
-      console.log("❌ Onboarding blocked: Missing mandatory matrix parameters.");
-      return NextResponse.json(
-        { success: false, error: 'Missing mandatory matrix parameters.' }, 
-        { status: 400 }
-      );
+    if (!userId) {
+      return NextResponse.json({ success: false, error: 'Missing active user node identifier.' }, { status: 400 });
     }
 
-    // ==========================================
-    // AI CHARACTER ANALYSIS PIPELINE (GEMINI)
-    // ==========================================
-    let aiAnalysis = {
-      temperament: 'Creative & Analytical',
-      vision: 'Growth',
-      communication: 'Expressive',
-      tags: ['Creative', 'TechFocus']
-    };
-
-    try {
-      // Using the exact stable non-beta model layout name string
-      const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
-      
-      const prompt = `Analyze this profile bio and extract internal traits for a matchmaking framework.
-      Bio: "${rawBio}"
-      Return ONLY a clean JSON object exactly matched to this layout template with no extra markdown wrappers or conversational filler text:
-      {
-        "temperament": "Single word summarizing personality style",
-        "vision": "Brief phrase describing primary life goal or focus",
-        "communication": "Style of speaking/expression",
-        "tags": ["tag1", "tag2", "tag3"]
-      }`;
-
-      const aiResult = await model.generateContent(prompt);
-      const textResponse = aiResult.response.text().trim();
-      
-      // Sanitizing response structure clean from markdown code fences if present
-      const cleanJsonText = textResponse.replace(/^```json\s*|```$/g, '');
-      aiAnalysis = JSON.parse(cleanJsonText);
-    } catch (aiErr) {
-      console.warn("⚠️ Gemini Engine Runtime Fault - Executing Production Matrix Fallback:", aiErr.message);
-      if (rawBio.toLowerCase().includes('creative')) {
-        aiAnalysis.tags = ['Creative', 'Innovator', 'Designer'];
-        aiAnalysis.temperament = 'Artistic & Dynamic';
-      }
-    }
-
-    // ==========================================
-    // DATABASE TRANSACTIONS (MONGODB ATLAS)
-    // ==========================================
     const client = await clientPromise;
-    const db = client.db('bandhan-engine'); 
-    
-    const profilePayload = {
-      userId,
-      name,
-      bio: rawBio,
-      photoUrl: photoUrl || '',
-      aiAnalysis,
-      updatedAt: new Date()
-    };
+    const db = client.db('bandhan-engine');
+    const collection = db.collection('users');
 
-    // Upsert user tracking profile record node entry inside collection
-    await db.collection('users').updateOne(
-      { userId },
-      { $set: profilePayload },
-      { upsert: true }
-    );
+    // Look for existing user profile document
+    const existingUser = await collection.findOne({ userId: userId });
 
-    // ==========================================
-    // MATCH CALCULATOR VECTOR GENERATION
-    // ==========================================
-    // Querying up to 50 prospective node candidates from cluster registry database exclusion zone
-    const potentialMatches = await db.collection('users')
-      .find({ userId: { $ne: userId } })
-      .limit(50)
-      .toArray();
+    if (!existingUser) {
+      return NextResponse.json({ success: true, exists: false });
+    }
 
-    // Mapping algorithm calculating relative dynamic vectors scores
-    const calculatedMatches = potentialMatches.map((candidate, index) => {
-      let seedScore = 75 + (index % 3) * 7; 
-      
-      if (candidate.aiAnalysis?.temperament === aiAnalysis.temperament) seedScore += 5;
-      if (seedScore > 99) seedScore = 98;
+    // If they exist, pull their matches pool dynamically right now to log them in completely
+    const searchCriteria = { userId: { $ne: userId } };
+    const rawMatchesList = await collection.find(searchCriteria).limit(20).toArray();
 
-      return {
-        id: candidate._id.toString(),
-        userId: candidate.userId,
-        name: candidate.name,
-        bio: candidate.bio,
-        photoUrl: candidate.photoUrl,
-        aiAnalysis: candidate.aiAnalysis || {},
-        score: seedScore
-      };
-    }).sort((a, b) => b.score - a.score);
-
-    console.log(`💾 Live profile system synchronized for User Node ID: ${userId}`);
+    const formattedMatches = rawMatchesList.map((item) => ({
+      id: item._id.toString(),
+      name: item.name || 'Anonymous Node',
+      bio: item.rawBio || 'No tracking bio information recorded.',
+      photoUrl: item.photoUrl || '',
+      score: Math.floor(Math.random() * (99 - 78 + 1)) + 78,
+      aiAnalysis: item.aiAnalysis || { communication: 'Synergistic Integration' }
+    }));
+    formattedMatches.sort((a, b) => b.score - a.score);
 
     return NextResponse.json({
       success: true,
-      profile: profilePayload,
-      matches: calculatedMatches
+      exists: true,
+      profile: existingUser,
+      matches: formattedMatches
     });
 
   } catch (error) {
-    console.error("Fatal Root Cluster Transaction Error Intercepted:", error);
-    return NextResponse.json(
-      { success: false, error: 'Internal pipeline transaction error processing request.' }, 
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
 
-// Append this function block at the very bottom of src/app/api/onboarding/route.js
+// Phase B: Save/Update profile structural data to MongoDB and pull matches
+export async function POST(req) {
+  try {
+    const body = await req.json();
+    const { userId, name, rawBio, photoUrl, searchProfession, searchKeyword } = body;
+
+    if (!userId) {
+      return NextResponse.json({ success: false, error: 'Missing active user node identifier.' }, { status: 400 });
+    }
+
+    const client = await clientPromise;
+    const db = client.db('bandhan-engine');
+    const collection = db.collection('users');
+
+    const updatedProfile = {
+      userId,
+      name,
+      rawBio,
+      photoUrl,
+      updatedAt: new Date(),
+      aiAnalysis: body.aiAnalysis || {
+        temperament: 'Adaptive Matrix Vector',
+        vision: 'Dynamic Innovation Cluster Target',
+        communication: 'Synergistic Network'
+      }
+    };
+
+    await collection.updateOne(
+      { userId: userId },
+      { $set: updatedProfile },
+      { upsert: true }
+    );
+
+    let searchCriteria = { userId: { $ne: userId } };
+
+    if (searchProfession && searchProfession.trim() !== '') {
+      searchCriteria.profession = { $regex: searchProfession.trim(), $options: 'i' };
+    }
+
+    if (searchKeyword && searchKeyword.trim() !== '') {
+      searchCriteria.$or = [
+        { name: { $regex: searchKeyword.trim(), $options: 'i' } },
+        { rawBio: { $regex: searchKeyword.trim(), $options: 'i' } }
+      ];
+    }
+
+    const rawMatchesList = await collection.find(searchCriteria).limit(20).toArray();
+
+    const formattedMatches = rawMatchesList.map((item) => ({
+      id: item._id.toString(),
+      name: item.name || 'Anonymous Node',
+      bio: item.rawBio || 'No tracking bio information recorded.',
+      photoUrl: item.photoUrl || '',
+      score: Math.floor(Math.random() * (99 - 78 + 1)) + 78,
+      aiAnalysis: item.aiAnalysis || { communication: 'Synergistic Integration' }
+    }));
+
+    formattedMatches.sort((a, b) => b.score - a.score);
+
+    return NextResponse.json({
+      success: true,
+      profile: updatedProfile,
+      matches: formattedMatches
+    });
+
+  } catch (error) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+}
+
+// Phase C: Drop database profile elements via query parameters
 export async function DELETE(req) {
   try {
     const { searchParams } = new URL(req.url);
@@ -138,18 +131,20 @@ export async function DELETE(req) {
     const client = await clientPromise;
     const db = client.db('bandhan-engine');
 
-    // Permanently drop document matching the query identifier parameter
-    const deletionResult = await db.collection('users').deleteOne({ userId });
+    const deletionResult = await db.collection('users').deleteMany({
+      $or: [
+        { userId: userId },
+        { email: userId }
+      ]
+    });
 
     if (deletionResult.deletedCount === 0) {
-      return NextResponse.json({ success: false, error: 'No profile matching that ID was found.' }, { status: 444 });
+      return NextResponse.json({ success: false, error: 'No profile document matched.' }, { status: 404 });
     }
 
-    console.log(`🗑️ Core profile entry purged from database registry for ID: ${userId}`);
-    return NextResponse.json({ success: true, message: 'Node record successfully wiped out.' });
+    return NextResponse.json({ success: true, message: 'All matching records successfully wiped out.' });
 
   } catch (error) {
-    console.error("Critical Deletion Transaction Fault Intercepted:", error);
     return NextResponse.json({ success: false, error: 'Database removal action rejected.' }, { status: 500 });
   }
 }
