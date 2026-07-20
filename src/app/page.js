@@ -25,6 +25,10 @@ export default function Home() {
     photoUrl: ''
   });
 
+  // Dynamic Real-Time Chat System State Tracking
+  const [activeChatMatch, setActiveChatMatch] = useState(null);
+  const [chatMessage, setChatMessage] = useState('');
+
   // Step 1: Send OTP to target user email box
   const handleRequestOtp = async (e) => {
     e.preventDefault();
@@ -58,7 +62,6 @@ export default function Home() {
     setError('');
 
     try {
-      // Phase A: Assert OTP token matches authorization parameters
       const verifyResponse = await fetch('/api/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -68,18 +71,15 @@ export default function Home() {
       const verifyResult = await verifyResponse.json();
       if (!verifyResult.success) throw new Error(verifyResult.error || 'Invalid credential code token entries.');
 
-      // Phase B: Fetch account configuration record status straight from MongoDB Atlas
       const profileCheckResponse = await fetch(`/api/onboarding?userId=${encodeURIComponent(inputEmail.trim())}`);
       const checkResult = await profileCheckResponse.json();
 
       if (!checkResult.success) throw new Error(checkResult.error || 'Database check anomaly.');
 
       if (checkResult.exists) {
-        // User is ALREADY registered -> Auto-populate profile configurations and boot Dashboard directly!
         setUserProfile(checkResult.profile);
         setMatches(checkResult.matches);
       } else {
-        // User is brand new -> Route them directly to fill out onboarding records
         setStep('REGISTER');
       }
     } catch (err) {
@@ -147,6 +147,17 @@ export default function Home() {
     }
   };
 
+  // Chat message simulator logic handler
+  const handleSendMessage = (e) => {
+    e.preventDefault();
+    if (!chatMessage.trim()) return;
+    
+    console.log(`📡 Signal payload routed to match identity path: ${activeChatMatch.id}`);
+    console.log(`💬 Transmission message content payload: "${chatMessage}"`);
+    
+    setChatMessage('');
+  };
+
   const handleLogOut = () => {
     setUserProfile(null);
     setMatches([]);
@@ -155,6 +166,7 @@ export default function Home() {
     setRegisterForm({ name: '', rawBio: '', photoUrl: '' });
     setSearchProfession('');
     setSearchKeyword('');
+    setActiveChatMatch(null);
     setStep('EMAIL');
     setError('');
   };
@@ -367,12 +379,75 @@ export default function Home() {
                     </div>
                   </div>
                   <p className="text-xs text-slate-300 bg-slate-950/40 p-3.5 rounded-xl border border-slate-950/80 leading-relaxed">{item.bio}</p>
+                  
+                  {/* Secure Signal Messaging Trigger */}
+                  <div className="mt-4 pt-3 border-t border-slate-800/60 flex justify-end">
+                    <button
+                      onClick={() => setActiveChatMatch(item)}
+                      className="px-4 py-1.5 bg-slate-950 hover:bg-rose-500/10 border border-slate-800 text-slate-300 hover:text-rose-400 font-bold text-xs rounded-xl shadow transition duration-150"
+                    >
+                      💬 Open Secure Signal Route
+                    </button>
+                  </div>
                 </div>
               ))
             )}
           </div>
         </div>
       )}
+
+      {/* DYNAMIC REAL-TIME CHAT PANEL OVERLAY CONTAINER */}
+      {activeChatMatch && (
+        <div className="fixed bottom-6 right-6 w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-4 duration-200">
+          
+          <div className="bg-gradient-to-r from-slate-950 to-slate-900 px-4 py-3 border-b border-slate-800 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse" />
+              <div>
+                <h4 className="text-xs font-black text-slate-200 tracking-wide truncate max-w-[180px]">{activeChatMatch.name}</h4>
+                <span className="text-[9px] font-mono text-rose-400/80 uppercase tracking-widest block font-bold">Signal Match: {activeChatMatch.score}%</span>
+              </div>
+            </div>
+            <button 
+              onClick={() => setActiveChatMatch(null)}
+              className="text-slate-500 hover:text-slate-300 text-sm font-bold bg-slate-950 w-6 h-6 rounded-lg flex items-center justify-center border border-slate-800 transition"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="p-4 h-64 overflow-y-auto bg-slate-950/50 space-y-3 flex flex-col justify-end">
+            <div className="text-center p-2">
+              <span className="text-[10px] text-slate-600 font-mono tracking-tight bg-slate-950 border border-slate-900 px-3 py-1 rounded-full">
+                🔒 Encrypted cluster handshake initialized safely
+              </span>
+            </div>
+            
+            <div className="max-w-[80%] bg-slate-800/60 border border-slate-700/50 text-slate-300 p-2.5 rounded-2xl text-xs rounded-tl-none self-start">
+              Hi {userProfile?.name || 'User Node'}! I noticed our AI trajectory vectors align. What framework stack architectures are you compiling today?
+            </div>
+          </div>
+
+          <form onSubmit={handleSendMessage} className="p-3 bg-slate-950 border-t border-slate-800 flex gap-2">
+            <input 
+              type="text"
+              placeholder="Type a secure network transmission..."
+              value={chatMessage}
+              onChange={(e) => setChatMessage(e.target.value)}
+              className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-rose-500/50"
+            />
+            <button 
+              type="submit"
+              disabled={!chatMessage.trim()}
+              className="px-4 bg-gradient-to-r from-rose-500 to-amber-500 hover:from-rose-600 disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-600 text-white text-xs font-bold rounded-xl shadow transition"
+            >
+              Send
+            </button>
+          </form>
+
+        </div>
+      )}
+
     </main>
   );
 }
