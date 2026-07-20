@@ -418,6 +418,31 @@ export default function Home() {
                   </div>
                   <p className="text-xs text-slate-300 bg-slate-950/40 p-3.5 rounded-xl border border-slate-950/80 leading-relaxed">{item.bio}</p>
                   
+                  {/* Dynamic AI Compatibility Accordion Element */}
+                  <div className="mt-3 bg-slate-950/80 border border-slate-800/80 rounded-xl overflow-hidden text-xs">
+                    <details className="group">
+                      <summary className="flex items-center justify-between px-3 py-2 cursor-pointer select-none font-bold text-slate-400 hover:text-rose-400 transition">
+                        <span>🤖 View AI Core Compatibility Analysis</span>
+                        <span className="text-[10px] transition group-open:rotate-180">▼</span>
+                      </summary>
+                      <div className="px-3 pb-3 pt-1 border-t border-slate-900 text-slate-300 space-y-2 font-medium">
+                        <p className="italic text-slate-400 leading-relaxed bg-slate-900/50 p-2 rounded-lg border border-slate-800/40">
+                          {item.aiAnalysis?.breakdown}
+                        </p>
+                        <div className="grid grid-cols-2 gap-2 text-[10px] uppercase tracking-wider font-mono">
+                          <div className="bg-slate-900 p-2 rounded border border-slate-800/40">
+                            <span className="text-slate-500 block">Communication</span>
+                            <span className="text-emerald-400 block truncate font-bold">{item.aiAnalysis?.communication}</span>
+                          </div>
+                          <div className="bg-slate-900 p-2 rounded border border-slate-800/40">
+                            <span className="text-slate-500 block">Matrix Type</span>
+                            <span className="text-amber-400 block truncate font-bold">{item.aiAnalysis?.temperament}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </details>
+                  </div>
+
                   {/* Persistent Messaging Switcher Node Action Trigger */}
                   <div className="mt-4 pt-3 border-t border-slate-800/60 flex justify-end">
                     <button

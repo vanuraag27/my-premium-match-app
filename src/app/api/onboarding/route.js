@@ -25,16 +25,25 @@ export async function GET(req) {
     const searchCriteria = { userId: { $ne: userId } };
     const rawMatchesList = await collection.find(searchCriteria).limit(20).toArray();
 
-    const formattedMatches = rawMatchesList.map((item) => ({
-      id: item._id.toString(),
-      userId: item.userId,
-      name: item.name || 'Anonymous Node',
-      bio: item.rawBio || 'No tracking bio information recorded.',
-      photoUrl: item.photoUrl || '',
-      profession: item.profession || 'Professional',
-      score: Math.floor(Math.random() * (99 - 78 + 1)) + 78,
-      aiAnalysis: item.aiAnalysis || { communication: 'Synergistic Integration' }
-    }));
+    const formattedMatches = rawMatchesList.map((item) => {
+      const matchProfession = item.profession || 'Professional';
+      return {
+        id: item._id.toString(),
+        userId: item.userId,
+        name: item.name || 'Anonymous Node',
+        bio: item.rawBio || 'No tracking bio information recorded.',
+        photoUrl: item.photoUrl || '',
+        profession: matchProfession,
+        score: Math.floor(Math.random() * (99 - 78 + 1)) + 78,
+        aiAnalysis: {
+          communication: item.aiAnalysis?.communication || 'Synergistic Synchronous Stream',
+          temperament: item.aiAnalysis?.temperament || 'Analytical / High Adaptability Matrix',
+          vision: item.aiAnalysis?.vision || 'Scalable Engineering Systems Deployment',
+          breakdown: `Aligned vectors detected across professional domains. High synergy observed between your background and their profile as a ${matchProfession}, focusing on collaborative structural problem-solving.`
+        }
+      };
+    });
+    
     formattedMatches.sort((a, b) => b.score - a.score);
 
     return NextResponse.json({
@@ -99,16 +108,24 @@ export async function POST(req) {
 
     const rawMatchesList = await collection.find(searchCriteria).limit(20).toArray();
 
-    const formattedMatches = rawMatchesList.map((item) => ({
-      id: item._id.toString(),
-      userId: item.userId,
-      name: item.name || 'Anonymous Node',
-      bio: item.rawBio || 'No tracking bio information recorded.',
-      photoUrl: item.photoUrl || '',
-      profession: item.profession || 'Professional',
-      score: Math.floor(Math.random() * (99 - 78 + 1)) + 78,
-      aiAnalysis: item.aiAnalysis || { communication: 'Synergistic Integration' }
-    }));
+    const formattedMatches = rawMatchesList.map((item) => {
+      const matchProfession = item.profession || 'Professional';
+      return {
+        id: item._id.toString(),
+        userId: item.userId,
+        name: item.name || 'Anonymous Node',
+        bio: item.rawBio || 'No tracking bio information recorded.',
+        photoUrl: item.photoUrl || '',
+        profession: matchProfession,
+        score: Math.floor(Math.random() * (99 - 78 + 1)) + 78,
+        aiAnalysis: {
+          communication: item.aiAnalysis?.communication || 'Synergistic Synchronous Stream',
+          temperament: item.aiAnalysis?.temperament || 'Analytical / High Adaptability Matrix',
+          vision: item.aiAnalysis?.vision || 'Scalable Engineering Systems Deployment',
+          breakdown: `Aligned vectors detected across professional domains. High synergy observed between your background and their profile as a ${matchProfession}, focusing on collaborative structural problem-solving.`
+        }
+      };
+    });
 
     formattedMatches.sort((a, b) => b.score - a.score);
 
