@@ -1,26 +1,16 @@
-import { NextResponse } from "next/server";
-import { getDatabase } from "@/lib/mongodb";
+import { NextResponse } from 'next/server';
+import { getDatabase } from '@/lib/mongodb';
 
-// GET Conversation
+// GET: Retrieve and normalize conversation history
 export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url);
-
-    const senderId = String(
-      searchParams.get("senderId") || ""
-    );
-
-    const receiverId = String(
-      searchParams.get("receiverId") || ""
-    );
+    const senderId = searchParams.get('senderId');
+    const receiverId = searchParams.get('receiverId');
 
     if (!senderId || !receiverId) {
       return NextResponse.json(
-        {
-          success: false,
-          error:
-            "senderId and receiverId are required.",
-        },
+        { success: false, error: 'senderId and receiverId are required parameters.' },
         { status: 400 }
       );
     }
@@ -28,125 +18,59 @@ export async function GET(req) {
     const db = await getDatabase();
 
     const rawMessages = await db
-      .collection("messages")
+      .collection('messages')
       .find({
         $or: [
-          {
-            senderId,
-            receiverId,
-          },
-          {
-            senderId: receiverId,
-            receiverId: senderId,
-          },
+          { senderId, receiverId },
+          { senderId: receiverId, receiverId: senderId },
         ],
       })
-      .sort({
-        createdAt: 1,
-        timestamp: 1,
-      })
+      .sort({ createdAt: 1, timestamp: 1 })
       .toArray();
 
-    const messages = rawMessages.map((msg) => ({
+    // Standardize documents for the frontend
+    const normalizedMessages = rawMessages.map((msg) => ({
       _id: msg._id.toString(),
       senderId: String(msg.senderId),
       receiverId: String(msg.receiverId),
-      text:
-        msg.text ||
-        msg.message ||
-        msg.content ||
-        "",
-      createdAt:
-        msg.createdAt ||
-        msg.timestamp ||
-        new Date().toISOString(),
-      read: Boolean(msg.read),
+      text: msg.text || msg.message || msg.content || '',
+      createdAt: msg.createdAt || msg.timestamp || new Date().toISOString(),
+      read: msg.read || false,
     }));
 
-    console.log(
-      `GET: ${senderId} -> ${receiverId} (${messages.length} messages)`
-    );
-
-    return NextResponse.json(
-      {
-        success: true,
-        messages,
-      },
-      {
-        status: 200,
-      }
-    );
+    return NextResponse.json({ success: true, messages: normalizedMessages }, { status: 200 });
   } catch (error) {
-    console.error(
-      "GET /api/messages error:",
-      error
-    );
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: error.message,
-      },
-      {
-        status: 500,
-      }
-    );
+    console.error('GET /api/messages error:', error);
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
 
-// POST Message
+// POST: Save normalized message document
 export async function POST(req) {
   try {
     const body = await req.json();
+    const senderId = String(body.senderId || '');
+    const receiverId = String(body.receiverId || '');
+    const messageText = body.text || body.message || body.content || '';
 
-    const senderId = String(
-      body.senderId || ""
-    );
-
-    const receiverId = String(
-      body.receiverId || ""
-    );
-
-    const text = (
-      body.text ||
-      body.message ||
-      body.content ||
-      ""
-    ).trim();
-
-    if (!senderId || !receiverId || !text) {
+    if (!senderId || !receiverId || !messageText.trim()) {
       return NextResponse.json(
-        {
-          success: false,
-          error:
-            "senderId, receiverId and text are required.",
-        },
-        {
-          status: 400,
-        }
+        { success: false, error: 'senderId, receiverId, and text are required.' },
+        { status: 400 }
       );
     }
-
-    console.log(
-      "POST:",
-      senderId,
-      receiverId,
-      text
-    );
 
     const db = await getDatabase();
 
     const newMessage = {
       senderId,
       receiverId,
-      text,
+      text: messageText.trim(),
       createdAt: new Date().toISOString(),
       read: false,
     };
 
-    const result = await db
-      .collection("messages")
-      .insertOne(newMessage);
+    const result = await db.collection('messages').insertOne(newMessage);
 
     return NextResponse.json(
       {
@@ -156,24 +80,10 @@ export async function POST(req) {
           _id: result.insertedId.toString(),
         },
       },
-      {
-        status: 201,
-      }
+      { status: 201 }
     );
   } catch (error) {
-    console.error(
-      "POST /api/messages error:",
-      error
-    );
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: error.message,
-      },
-      {
-        status: 500,
-      }
-    );
+    console.error('POST /api/messages error:', error);
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
