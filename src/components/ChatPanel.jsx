@@ -1,152 +1,163 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
-export default function ChatPanel({ currentUserId, partnerCandidate }) {
+export default function ChatPanel({ currentUserId, selectedCandidate, onClose }) {
   const [messages, setMessages] = useState([]);
-  const [newMessage, setNewMessage] = useState('');
-  const [hasNewArrival, setHasNewArrival] = useState(false);
+  const [inputMessage, setInputMessage] = useState('');
+  const [loading, setLoading] = useState(false);
+  const messagesEndRef = useRef(null);
 
-  // Fetch messages and check for updates
-  const fetchMessages = async () => {
-    if (!currentUserId || !partnerCandidate?._id) return;
+  const candidateId = selectedCandidate?.userId || selectedCandidate?.id;
 
-    try {
-      const res = await fetch(`/api/messages?userId=${currentUserId}&partnerId=${partnerCandidate._id}`);
-      const data = await res.json();
-      
-      if (data.success) {
-        if (data.messages.length > messages.length && messages.length > 0) {
-          setHasNewArrival(true);
-        }
-        setMessages(data.messages);
-      }
-    } catch (err) {
-      console.error('Failed to load chat messages:', err);
-    }
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // Poll for new messages every 4 seconds
   useEffect(() => {
-    fetchMessages();
-    const interval = setInterval(fetchMessages, 4000);
-    return () => clearInterval(interval);
-  }, [currentUserId, partnerCandidate?._id]);
+    if (!currentUserId || !candidateId) return;
 
-  // Handle message sending
-  const handleSend = async (e) => {
-    e.preventDefault();
-    if (!newMessage.trim()) return;
-
-    const payload = {
-      senderId: currentUserId,
-      receiverId: partnerCandidate._id,
-      text: newMessage,
-      timestamp: new Date().toISOString(),
-      read: false
+    const fetchMessages = async () => {
+      try {
+        const res = await fetch(`/api/messages?senderId=${currentUserId}&receiverId=${candidateId}`);
+        const data = await res.json();
+        if (data.success && Array.isArray(data.messages)) {
+          setMessages(data.messages);
+        }
+      } catch (err) {
+        console.error('Failed to load chat history:', err);
+      }
     };
 
+    setLoading(true);
+    fetchMessages().finally(() => setLoading(false));
+
+    const interval = setInterval(fetchMessages, 3000);
+    return () => clearInterval(interval);
+  }, [currentUserId, candidateId]);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    const trimmedText = inputMessage.trim();
+
+    if (!trimmedText || !currentUserId || !candidateId) return;
+
+    const tempId = `temp-${Date.now()}`;
+    const optimisticMsg = {
+      _id: tempId,
+      senderId: String(currentUserId),
+      receiverId: String(candidateId),
+      text: trimmedText,
+      createdAt: new Date().toISOString(),
+    };
+
+    setMessages((prev) => [...prev, optimisticMsg]);
+    setInputMessage('');
+
     try {
-      const res = await fetch('/api/messages', {
+      const response = await fetch('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          senderId: currentUserId,
+          receiverId: candidateId,
+          text: trimmedText,
+        }),
       });
-      if (res.ok) {
-        setNewMessage('');
-        fetchMessages();
+
+      const data = await response.json();
+
+      if (data.success && data.message) {
+        setMessages((prev) =>
+          prev.map((msg) => (msg._id === tempId ? data.message : msg))
+        );
+      } else {
+        console.error('Failed to send message:', data.error);
       }
     } catch (err) {
       console.error('Error sending message:', err);
     }
   };
 
-  // Handle message deletion from user panel
-  const handleDelete = async (messageId) => {
-    try {
-      const res = await fetch('/api/messages', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messageId, userId: currentUserId })
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        setMessages((prev) => prev.filter((msg) => msg._id !== messageId));
-      }
-    } catch (err) {
-      console.error('Failed to delete message:', err);
-    }
-  };
+  if (!selectedCandidate) return null;
 
   return (
-    <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden flex flex-col h-[500px]">
-      
-      {/* Header with New Arrival Indicator */}
-      <div className="p-4 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h3 className="font-bold text-slate-900 dark:text-white">
-            Chat with {partnerCandidate?.name || 'Candidate'}
-          </h3>
-          {hasNewArrival && (
-            <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-500 text-white animate-bounce">
-              🔴 New Message
-            </span>
-          )}
+    <div className="flex flex-col h-full bg-white border-l border-gray-200 shadow-xl w-full max-w-md fixed right-0 top-0 bottom-0 z-50">
+      <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-gradient-to-r from-rose-500 to-pink-600 text-white">
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center font-bold text-white uppercase">
+            {selectedCandidate.name ? selectedCandidate.name[0] : 'U'}
+          </div>
+          <div>
+            <h3 className="font-semibold leading-tight">{selectedCandidate.name}</h3>
+            <p className="text-xs text-rose-100">{selectedCandidate.profession || 'Match Profile'}</p>
+          </div>
         </div>
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-full hover:bg-white/20 text-white transition-colors"
+          >
+            ✕
+          </button>
+        )}
       </div>
 
-      {/* Messages Stream */}
-      <div 
-        className="flex-1 p-4 overflow-y-auto space-y-3"
-        onScroll={() => setHasNewArrival(false)}
-      >
-        {messages.map((msg) => {
-          const isSender = msg.senderId === currentUserId;
-          return (
-            <div
-              key={msg._id}
-              className={`group relative flex flex-col ${isSender ? 'items-end' : 'items-start'}`}
-            >
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50">
+        {loading && messages.length === 0 ? (
+          <div className="text-center text-xs text-gray-400 py-8">Loading conversation...</div>
+        ) : messages.length === 0 ? (
+          <div className="text-center text-xs text-gray-400 py-8">
+            No messages yet. Say hello to {selectedCandidate.name}!
+          </div>
+        ) : (
+          messages.map((msg) => {
+            const isMe = String(msg.senderId) === String(currentUserId);
+            return (
               <div
-                className={`max-w-[80%] p-3 rounded-2xl text-xs leading-relaxed relative ${
-                  isSender
-                    ? 'bg-rose-500 text-white rounded-br-none'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-bl-none'
-                }`}
+                key={msg._id}
+                className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
               >
-                {msg.text}
-
-                {/* Delete Button on Hover */}
-                <button
-                  onClick={() => handleDelete(msg._id)}
-                  title="Delete message"
-                  className="opacity-0 group-hover:opacity-100 absolute -top-2 -right-2 bg-slate-900 text-white rounded-full p-1 text-[9px] hover:bg-rose-600 transition-opacity"
+                <div
+                  className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm shadow-sm ${
+                    isMe
+                      ? 'bg-rose-500 text-white rounded-br-none'
+                      : 'bg-white text-gray-800 border border-gray-100 rounded-bl-none'
+                  }`}
                 >
-                  ✕
-                </button>
+                  {msg.text}
+                </div>
+                <span className="text-[10px] text-gray-400 mt-1 px-1">
+                  {msg.createdAt
+                    ? new Date(msg.createdAt).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })
+                    : ''}
+                </span>
               </div>
-
-              <span className="text-[10px] text-slate-400 mt-1 px-1">
-                {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </span>
-            </div>
-          );
-        })}
+            );
+          })
+        )}
+        <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Form */}
-      <form onSubmit={handleSend} className="p-3 border-t border-slate-200 dark:border-slate-800 flex gap-2">
+      <form onSubmit={handleSendMessage} className="p-3 bg-white border-t border-gray-100 flex items-center gap-2">
         <input
           type="text"
-          value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
-          placeholder="Type a message..."
-          className="flex-1 px-4 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
+          value={inputMessage}
+          onChange={(e) => setInputMessage(e.target.value)}
+          placeholder="Type your message..."
+          className="flex-1 bg-gray-100 text-gray-800 rounded-full px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/50"
         />
         <button
           type="submit"
-          className="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs rounded-xl shadow-md transition-all"
+          disabled={!inputMessage.trim()}
+          className="bg-rose-500 text-white rounded-full px-4 py-2.5 text-sm font-medium hover:bg-rose-600 disabled:opacity-50 transition-colors"
         >
           Send
         </button>
