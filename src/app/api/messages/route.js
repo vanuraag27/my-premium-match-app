@@ -1,16 +1,22 @@
 import { NextResponse } from 'next/server';
-import { connectToDatabase } from '../../../lib/mongodb';
+import clientPromise from '../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
+
+// Helper function to get MongoDB instance
+async function getDb() {
+  const client = await clientPromise;
+  return client.db(); // Uses default database from MONGODB_URI
+}
 
 // GET: Fetch conversation OR unread message indicators
 export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url);
-    const userId = searchParams.get('userId');
-    const partnerId = searchParams.get('partnerId');
+    const userId = searchParams.get('userId') || searchParams.get('senderId');
+    const partnerId = searchParams.get('partnerId') || searchParams.get('receiverId');
     const checkUnread = searchParams.get('checkUnread');
 
-    const { db } = await connectToDatabase();
+    const db = await getDb();
 
     // Check for unread message counts/indicators across conversations
     if (checkUnread === 'true' && userId) {
@@ -29,7 +35,7 @@ export async function GET(req) {
             { senderId: userId, receiverId: partnerId },
             { senderId: partnerId, receiverId: userId }
           ],
-          deletedFor: { $ne: userId } // Don't return messages deleted by this user
+          deletedFor: { $ne: userId } // Hide messages soft-deleted by this user
         })
         .sort({ timestamp: 1 })
         .toArray();
@@ -49,6 +55,38 @@ export async function GET(req) {
   }
 }
 
+// POST: Save new incoming message
+export async function POST(req) {
+  try {
+    const body = await req.json();
+    const { senderId, receiverId, text, timestamp } = body;
+
+    if (!senderId || !receiverId || !text) {
+      return NextResponse.json({ success: false, error: 'senderId, receiverId, and text are required' }, { status: 400 });
+    }
+
+    const db = await getDb();
+    
+    const newMessage = {
+      senderId,
+      receiverId,
+      text,
+      timestamp: timestamp || new Date().toISOString(),
+      read: false,
+      deletedFor: []
+    };
+
+    const result = await db.collection('messages').insertOne(newMessage);
+
+    return NextResponse.json({
+      success: true,
+      message: { ...newMessage, _id: result.insertedId }
+    });
+  } catch (error) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+}
+
 // DELETE: Hide/delete a message for the requesting user
 export async function DELETE(req) {
   try {
@@ -58,9 +96,9 @@ export async function DELETE(req) {
       return NextResponse.json({ success: false, error: 'Message ID and User ID are required' }, { status: 400 });
     }
 
-    const { db } = await connectToDatabase();
+    const db = await getDb();
 
-    // Soft delete: append user ID to deletedFor array so the message disappears from their panel
+    // Soft delete: append user ID to deletedFor array
     await db.collection('messages').updateOne(
       { _id: new ObjectId(messageId) },
       { $addToSet: { deletedFor: userId } }
