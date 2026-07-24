@@ -24,8 +24,10 @@ export default function Home() {
     name: '',
     profession: '',
     rawBio: '',
-    photoUrl: ''
+    photoUrl: '',
+    audioNotificationsEnabled: true
   });
+  const [registerImageError, setRegisterImageError] = useState('');
 
   // Dynamic Profile Modification Drawer State Controls
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -33,8 +35,10 @@ export default function Home() {
     name: '',
     profession: '',
     rawBio: '',
-    photoUrl: ''
+    photoUrl: '',
+    audioNotificationsEnabled: true
   });
+  const [editImageError, setEditImageError] = useState('');
 
   // Database-Backed Chat Engine System States
   const [activeChatMatch, setActiveChatMatch] = useState(null);
@@ -42,19 +46,47 @@ export default function Home() {
   const [chatLogs, setChatLogs] = useState([]);
 
   // --- New Message Audio Notification refs ---
-  // Single reusable Audio instance (avoids leaking a new Audio object on every poll/render)
   const notificationAudioRef = useRef(null);
-  // Tracks whether we've successfully "unlocked" audio playback via a user gesture,
-  // which browsers require before allowing programmatic audio.play()
   const audioUnlockedRef = useRef(false);
-  // Tracks which message IDs have already been seen for the CURRENT open chat,
-  // so we only notify for genuinely new incoming messages (and not on chat switch/refresh)
-  const seenMessageIdsRef = useRef(null); // null = not yet loaded for this chat
-  // Identifies which conversation seenMessageIdsRef currently belongs to
+  const seenMessageIdsRef = useRef(null);
   const activeChatKeyRef = useRef(null);
 
-  // Create the single Audio instance once on mount, with graceful error handling
-  // in case the notification file is missing/inaccessible.
+  // Reusable helper for handling local image uploads
+  const handlePhotoUpload = (e, setForm, setErrorState) => {
+    const file = e.target.files?.[0];
+    setErrorState('');
+
+    if (!file) return;
+
+    // Check File Extension & MIME Type (.jpg, .jpeg, .png)
+    const validExtensions = ['image/jpeg', 'image/jpg', 'image/png'];
+    const fileExtension = file.name.split('.').pop().toLowerCase();
+    
+    if (!validExtensions.includes(file.type) && !['jpg', 'jpeg', 'png'].includes(fileExtension)) {
+      setErrorState('Unsupported file type. Only .jpg, .jpeg, and .png formats are allowed.');
+      e.target.value = '';
+      return;
+    }
+
+    // Restrict size to maximum 200 KB
+    if (file.size > 200 * 1024) {
+      setErrorState(`File size exceeds limit (Max 200 KB). Current size: ${(file.size / 1024).toFixed(1)} KB.`);
+      e.target.value = '';
+      return;
+    }
+
+    // Read and encode base64 preview
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setForm((prev) => ({ ...prev, photoUrl: event.target.result }));
+    };
+    reader.onerror = () => {
+      setErrorState('Failed to read image file. Please try again.');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Create the single Audio instance once on mount
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -67,16 +99,12 @@ export default function Home() {
     notificationAudioRef.current = audio;
 
     return () => {
-      // Cleanup on unmount to avoid dangling references/leaks
       audio.pause();
       notificationAudioRef.current = null;
     };
   }, []);
 
-  // Browsers block audio playback until the user has interacted with the page.
-  // Unlock playback the first time the user clicks/taps/presses a key anywhere,
-  // by playing (and immediately pausing/resetting) the audio element. This works
-  // across Chrome, Edge, Firefox, and mobile Safari/Chrome.
+  // Unlock playback on initial user gesture
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -91,9 +119,7 @@ export default function Home() {
             audio.currentTime = 0;
             audioUnlockedRef.current = true;
           })
-          .catch(() => {
-            // Still locked (e.g. gesture didn't count); listeners stay attached to retry.
-          });
+          .catch(() => {});
       } else {
         audioUnlockedRef.current = true;
       }
@@ -107,11 +133,10 @@ export default function Home() {
     };
   }, []);
 
-  // Plays the notification sound safely: resets playback position so rapid
-  // consecutive messages retrigger cleanly (no overlapping instances), and
-  // swallows/logs any rejected play() promise so it never surfaces as an
-  // unhandled promise rejection or console error.
   const playNotificationSound = () => {
+    // Audio Notification Toggle evaluation
+    if (userProfile?.audioNotificationsEnabled === false) return;
+
     const audio = notificationAudioRef.current;
     if (!audio) return;
     try {
@@ -119,7 +144,7 @@ export default function Home() {
       const playPromise = audio.play();
       if (playPromise && typeof playPromise.then === 'function') {
         playPromise.catch((err) => {
-          console.warn('Notification sound could not play (likely blocked until user interacts with the page):', err);
+          console.warn('Notification sound could not play:', err);
         });
       }
     } catch (err) {
@@ -133,12 +158,40 @@ export default function Home() {
     setTimeout(() => setToastMessage(''), 4000);
   };
 
-  // Loop to pull live message logs automatically if conversation route stays open
+  // Toggle Audio Notifications directly and sync to DB
+  const handleToggleAudioNotifications = async () => {
+    if (!userProfile) return;
+    const updatedState = !userProfile.audioNotificationsEnabled;
+    
+    // Optimistic UI updates
+    setUserProfile((prev) => ({ ...prev, audioNotificationsEnabled: updatedState }));
+    setEditForm((prev) => ({ ...prev, audioNotificationsEnabled: updatedState }));
+
+    try {
+      const response = await fetch('/api/onboarding', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...userProfile,
+          audioNotificationsEnabled: updatedState
+        }),
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error || 'Failed to update preferences.');
+      showToast(updatedState ? "Audio alerts enabled" : "Audio alerts muted");
+    } catch (err) {
+      console.error("Failed to update notification setting:", err);
+      // Rollback on error
+      setUserProfile((prev) => ({ ...prev, audioNotificationsEnabled: !updatedState }));
+      setEditForm((prev) => ({ ...prev, audioNotificationsEnabled: !updatedState }));
+      showToast("Error updating notification settings");
+    }
+  };
+
+  // Loop to pull live message logs
   useEffect(() => {
     let internalTimer;
     if (userProfile?.userId && activeChatMatch?.userId) {
-      // A new conversation was opened (chat switch, or first open after refresh/reconnect):
-      // reset the "seen messages" tracking so history isn't mistaken for new incoming messages.
       const chatKey = `${userProfile.userId}::${activeChatMatch.userId}`;
       if (activeChatKeyRef.current !== chatKey) {
         activeChatKeyRef.current = chatKey;
@@ -155,10 +208,6 @@ export default function Home() {
             const previouslySeenIds = seenMessageIdsRef.current || new Set();
 
             if (!isFirstLoadForThisChat) {
-              // Only notify for messages that are (a) not from the current user and
-              // (b) not already accounted for, so refreshes/reconnects/re-polls never
-              // replay sounds for old messages, and multiple new messages in one poll
-              // still trigger just a single, non-overlapping notification.
               const hasNewIncomingMessage = incomingMessages.some(
                 (msg) =>
                   String(msg.senderId) !== String(userProfile.userId) &&
@@ -232,12 +281,12 @@ export default function Home() {
       if (checkResult.exists) {
         setUserProfile(checkResult.profile);
         setMatches(checkResult.matches);
-        // Synchronize edit buffer fields
         setEditForm({
           name: checkResult.profile.name || '',
           profession: checkResult.profile.profession || '',
           rawBio: checkResult.profile.rawBio || '',
-          photoUrl: checkResult.profile.photoUrl || ''
+          photoUrl: checkResult.profile.photoUrl || '',
+          audioNotificationsEnabled: checkResult.profile.audioNotificationsEnabled !== undefined ? checkResult.profile.audioNotificationsEnabled : true
         });
         showToast("Gateway connection verification authenticated.");
       } else {
@@ -252,6 +301,7 @@ export default function Home() {
 
   const handleRegisterProfileSubmit = async (e) => {
     e.preventDefault();
+    if (registerImageError) return;
     setLoading(true);
     setError('');
 
@@ -273,7 +323,8 @@ export default function Home() {
         name: result.profile.name || '',
         profession: result.profile.profession || '',
         rawBio: result.profile.rawBio || '',
-        photoUrl: result.profile.photoUrl || ''
+        photoUrl: result.profile.photoUrl || '',
+        audioNotificationsEnabled: result.profile.audioNotificationsEnabled !== undefined ? result.profile.audioNotificationsEnabled : true
       });
       showToast("Profile node successfully committed to cluster database.");
     } catch (err) {
@@ -285,6 +336,7 @@ export default function Home() {
 
   const handleUpdateProfileSubmit = async (e) => {
     e.preventDefault();
+    if (editImageError) return;
     setLoading(true);
     setError('');
 
@@ -371,7 +423,9 @@ export default function Home() {
     setMatches([]);
     setInputEmail('');
     setOtpCode('');
-    setRegisterForm({ name: '', profession: '', rawBio: '', photoUrl: '' });
+    setRegisterForm({ name: '', profession: '', rawBio: '', photoUrl: '', audioNotificationsEnabled: true });
+    setRegisterImageError('');
+    setEditImageError('');
     setSearchProfession('');
     setSearchKeyword('');
     setActiveChatMatch(null);
@@ -484,9 +538,25 @@ export default function Home() {
                 <input type="text" required placeholder="e.g. Software Engineer, Analyst" value={registerForm.profession} onChange={(e) => setRegisterForm(prev => ({ ...prev, profession: e.target.value }))} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-rose-500/50" />
               </div>
 
+              {/* Profile Photo File Upload Field */}
               <div className="space-y-1">
-                <label className="text-xs uppercase font-extrabold text-slate-400 block">Photo URL Link</label>
-                <input type="url" placeholder="Paste image share address string" value={registerForm.photoUrl} onChange={(e) => setRegisterForm(prev => ({ ...prev, photoUrl: e.target.value }))} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-rose-500/50" />
+                <label className="text-xs uppercase font-extrabold text-slate-400 block">Profile Photo Upload</label>
+                <input 
+                  type="file" 
+                  accept=".jpg,.jpeg,.png" 
+                  onChange={(e) => handlePhotoUpload(e, setRegisterForm, setRegisterImageError)} 
+                  className="w-full text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-slate-800 file:text-slate-200 hover:file:bg-slate-700 cursor-pointer bg-slate-950 border border-slate-800 rounded-xl p-1" 
+                />
+                <p className="text-[10px] text-slate-500">Formats: .jpg, .jpeg, .png (Max limit: 200 KB)</p>
+                {registerImageError && (
+                  <p className="text-xs text-rose-400 font-semibold mt-1">{registerImageError}</p>
+                )}
+                {registerForm.photoUrl && (
+                  <div className="mt-2 flex items-center gap-3">
+                    <img src={registerForm.photoUrl} alt="Preview" className="w-12 h-12 rounded-full object-cover border border-rose-500" />
+                    <span className="text-[10px] text-emerald-400 font-mono font-bold">Image Preview Ready</span>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-1">
@@ -671,10 +741,49 @@ export default function Home() {
                 <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Core Professional Stack Vector</label>
                 <input type="text" required value={editForm.profession} onChange={(e) => setEditForm(prev => ({ ...prev, profession: e.target.value }))} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-100 focus:outline-none focus:border-rose-500/40" />
               </div>
+              
+              {/* Profile Photo Upload Option */}
               <div>
-                <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Profile Photo Access Link</label>
-                <input type="url" value={editForm.photoUrl} onChange={(e) => setEditForm(prev => ({ ...prev, photoUrl: e.target.value }))} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-100 focus:outline-none focus:border-rose-500/40" />
+                <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Profile Photo Upload</label>
+                <input 
+                  type="file" 
+                  accept=".jpg,.jpeg,.png" 
+                  onChange={(e) => handlePhotoUpload(e, setEditForm, setEditImageError)} 
+                  className="w-full text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-slate-800 file:text-slate-200 hover:file:bg-slate-700 cursor-pointer bg-slate-950 border border-slate-800 rounded-xl p-1" 
+                />
+                <p className="text-[10px] text-slate-500 mt-1">Formats: .jpg, .jpeg, .png (Max limit: 200 KB)</p>
+                {editImageError && (
+                  <p className="text-xs text-rose-400 font-semibold mt-1">{editImageError}</p>
+                )}
+                {editForm.photoUrl && (
+                  <div className="mt-2 flex items-center gap-3">
+                    <img src={getDirectDriveUrl(editForm.photoUrl)} alt="Preview" className="w-12 h-12 rounded-full object-cover border border-rose-500" />
+                    <span className="text-[10px] text-emerald-400 font-mono font-bold">Image Preview Ready</span>
+                  </div>
+                )}
               </div>
+
+              {/* Audio Notification Toggle Switch */}
+              <div className="flex items-center justify-between p-3 bg-slate-950 border border-slate-800 rounded-xl">
+                <div>
+                  <label className="text-xs font-bold text-slate-200 block">Audio Notifications</label>
+                  <span className="text-[10px] text-slate-400 font-normal block">Enable sound triggers for incoming messages</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditForm(prev => ({ ...prev, audioNotificationsEnabled: !prev.audioNotificationsEnabled }))}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                    editForm.audioNotificationsEnabled ? 'bg-emerald-500' : 'bg-slate-700'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      editForm.audioNotificationsEnabled ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+
               <div>
                 <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Biographical Context Data</label>
                 <textarea required rows={3} value={editForm.rawBio} onChange={(e) => setEditForm(prev => ({ ...prev, rawBio: e.target.value }))} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-100 resize-none focus:outline-none focus:border-rose-500/40" />
@@ -697,17 +806,41 @@ export default function Home() {
       {activeChatMatch && (
         <div className="fixed bottom-6 right-6 w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-4 duration-200">
           
+          {/* Header with Audio Toggle Control */}
           <div className="bg-gradient-to-r from-slate-950 to-slate-900 px-4 py-3 border-b border-slate-800 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse" />
               <div>
-                <h4 className="text-xs font-black text-slate-200 tracking-wide truncate max-w-[180px]">{activeChatMatch.name}</h4>
+                <h4 className="text-xs font-black text-slate-200 tracking-wide truncate max-w-[140px]">{activeChatMatch.name}</h4>
                 <span className="text-[9px] font-mono text-emerald-400 block font-bold">Signal Match Weight: {activeChatMatch.score}%</span>
               </div>
             </div>
-            <button onClick={() => setActiveChatMatch(null)} className="text-slate-500 hover:text-slate-300 text-sm font-bold bg-slate-950 w-6 h-6 rounded-lg flex items-center justify-center border border-slate-800 transition">✕</button>
+
+            <div className="flex items-center gap-2">
+              {/* Message Box Audio Notification Toggle */}
+              <button
+                type="button"
+                title={userProfile?.audioNotificationsEnabled ? "Mute Audio Notifications" : "Enable Audio Notifications"}
+                onClick={handleToggleAudioNotifications}
+                className={`p-1.5 rounded-lg border text-xs flex items-center justify-center transition-colors ${
+                  userProfile?.audioNotificationsEnabled 
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20' 
+                    : 'bg-slate-800 border-slate-700 text-slate-500 hover:bg-slate-700'
+                }`}
+              >
+                {userProfile?.audioNotificationsEnabled ? '🔔' : '🔕'}
+              </button>
+
+              <button 
+                onClick={() => setActiveChatMatch(null)} 
+                className="text-slate-500 hover:text-slate-300 text-sm font-bold bg-slate-950 w-6 h-6 rounded-lg flex items-center justify-center border border-slate-800 transition"
+              >
+                ✕
+              </button>
+            </div>
           </div>
 
+          {/* Message Body Logs */}
           <div className="p-4 h-64 overflow-y-auto bg-slate-950/50 space-y-2.5 flex flex-col">
             <div className="text-center p-1 mb-1">
               <span className="text-[9px] text-slate-600 font-mono tracking-tight bg-slate-950 border border-slate-900 px-3 py-0.5 rounded-full">🔒 Database sync channel connection secure</span>
@@ -721,6 +854,7 @@ export default function Home() {
             })}
           </div>
 
+          {/* Message Input Payload Form */}
           <form onSubmit={handleSendMessage} className="p-3 bg-slate-950 border-t border-slate-800 flex gap-2">
             <input type="text" placeholder="Type a secure transmission payload..." value={chatMessage} onChange={(e) => setChatMessage(e.target.value)} className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-rose-500/50 font-medium" />
             <button type="submit" disabled={!chatMessage.trim()} className="px-4 bg-gradient-to-r from-rose-500 via-amber-500 to-emerald-500 disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-600 text-white text-xs font-bold rounded-xl shadow transition duration-150">Send</button>

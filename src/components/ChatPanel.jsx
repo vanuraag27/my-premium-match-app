@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 
-export default function ChatPanel({ currentUserId, selectedCandidate, onClose }) {
+export default function ChatPanel({ currentUserId, selectedCandidate, audioNotificationsEnabled = true, onClose }) {
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [loading, setLoading] = useState(false);
@@ -28,6 +28,7 @@ export default function ChatPanel({ currentUserId, selectedCandidate, onClose })
   }, []);
 
   const playNotificationSound = () => {
+    if (!audioNotificationsEnabled) return; // Respect audio notification setting
     if (audioRef.current) {
       audioRef.current.currentTime = 0;
       audioRef.current.play().catch((err) => {

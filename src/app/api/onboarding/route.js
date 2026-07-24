@@ -41,6 +41,26 @@ async function getDatabase() {
   }
 }
 
+// Validate base64 photo data on the server side
+function validatePhotoUrl(photoUrl) {
+  if (!photoUrl) return null;
+  
+  // Handle Data URL (base64) validation
+  if (photoUrl.startsWith('data:image/')) {
+    const matches = photoUrl.match(/^data:(image\/(jpeg|jpg|png));base64,(.+)$/i);
+    if (!matches) {
+      return 'Invalid image format. Only JPG, JPEG, and PNG files are allowed.';
+    }
+
+    const base64Data = matches[3];
+    const sizeInBytes = Math.ceil((base64Data.length * 3) / 4);
+    if (sizeInBytes > 200 * 1024) {
+      return 'Uploaded file exceeds the maximum limit of 200 KB.';
+    }
+  }
+  return null;
+}
+
 // Fetch user profile and compute real vector matches
 export async function GET(req) {
   try {
@@ -64,6 +84,11 @@ export async function GET(req) {
 
     if (!existingUser) {
       return NextResponse.json({ success: true, exists: false });
+    }
+
+    // Default audioNotificationsEnabled to true if not explicitly set
+    if (existingUser.audioNotificationsEnabled === undefined) {
+      existingUser.audioNotificationsEnabled = true;
     }
 
     // Fetch potential partner matching items excluding self
@@ -110,10 +135,18 @@ export async function GET(req) {
 export async function POST(req) {
   try {
     const body = await req.json();
-    const { userId, name, rawBio, photoUrl, profession, searchProfession, searchKeyword } = body;
+    const { userId, name, rawBio, photoUrl, profession, searchProfession, searchKeyword, audioNotificationsEnabled } = body;
 
     if (!userId) {
       return NextResponse.json({ success: false, error: 'Missing active user node identifier.' }, { status: 400 });
+    }
+
+    // Server-side photo validation
+    if (photoUrl) {
+      const photoValidationError = validatePhotoUrl(photoUrl);
+      if (photoValidationError) {
+        return NextResponse.json({ success: false, error: photoValidationError }, { status: 400 });
+      }
     }
 
     const db = await getDatabase();
@@ -132,6 +165,7 @@ export async function POST(req) {
       rawBio,
       photoUrl,
       profession: profession || 'Developer',
+      audioNotificationsEnabled: audioNotificationsEnabled !== undefined ? Boolean(audioNotificationsEnabled) : true,
       updatedAt: new Date(),
       aiAnalysis: body.aiAnalysis || {
         temperament: 'Adaptive Matrix Vector',
