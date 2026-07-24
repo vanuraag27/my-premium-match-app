@@ -43,11 +43,17 @@ export async function POST(req) {
     const client = await clientPromise;
     const db = client.db('bandhan-engine');
 
+    // Optional: Automatically ensure TTL index exists (e.g. 24 hours = 86400 seconds)
+    await db.collection('messages').createIndex(
+      { timestamp: 1 }, 
+      { expireAfterSeconds: 86400 }
+    );
+
     const entryPayload = {
       senderId: String(senderId),
       receiverId: String(receiverId),
       messageText: messageText.trim(),
-      timestamp: new Date() // Ensure this is a native Date object for TTL index
+      timestamp: new Date() // Native BSON Date for TTL auto-deletion
     };
 
     const result = await db.collection('messages').insertOne(entryPayload);
