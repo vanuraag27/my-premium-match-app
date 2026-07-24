@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 export default function Home() {
   // Authentication & Session Core States
@@ -41,6 +41,92 @@ export default function Home() {
   const [chatMessage, setChatMessage] = useState('');
   const [chatLogs, setChatLogs] = useState([]);
 
+  // --- New Message Audio Notification refs ---
+  // Single reusable Audio instance (avoids leaking a new Audio object on every poll/render)
+  const notificationAudioRef = useRef(null);
+  // Tracks whether we've successfully "unlocked" audio playback via a user gesture,
+  // which browsers require before allowing programmatic audio.play()
+  const audioUnlockedRef = useRef(false);
+  // Tracks which message IDs have already been seen for the CURRENT open chat,
+  // so we only notify for genuinely new incoming messages (and not on chat switch/refresh)
+  const seenMessageIdsRef = useRef(null); // null = not yet loaded for this chat
+  // Identifies which conversation seenMessageIdsRef currently belongs to
+  const activeChatKeyRef = useRef(null);
+
+  // Create the single Audio instance once on mount, with graceful error handling
+  // in case the notification file is missing/inaccessible.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const audio = new Audio('/notification.mp3');
+    audio.preload = 'auto';
+    audio.volume = 1.0;
+    audio.addEventListener('error', () => {
+      console.error('Notification sound failed to load: /notification.mp3 is missing or inaccessible.');
+    });
+    notificationAudioRef.current = audio;
+
+    return () => {
+      // Cleanup on unmount to avoid dangling references/leaks
+      audio.pause();
+      notificationAudioRef.current = null;
+    };
+  }, []);
+
+  // Browsers block audio playback until the user has interacted with the page.
+  // Unlock playback the first time the user clicks/taps/presses a key anywhere,
+  // by playing (and immediately pausing/resetting) the audio element. This works
+  // across Chrome, Edge, Firefox, and mobile Safari/Chrome.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const unlockAudio = () => {
+      if (audioUnlockedRef.current || !notificationAudioRef.current) return;
+      const audio = notificationAudioRef.current;
+      const playPromise = audio.play();
+      if (playPromise && typeof playPromise.then === 'function') {
+        playPromise
+          .then(() => {
+            audio.pause();
+            audio.currentTime = 0;
+            audioUnlockedRef.current = true;
+          })
+          .catch(() => {
+            // Still locked (e.g. gesture didn't count); listeners stay attached to retry.
+          });
+      } else {
+        audioUnlockedRef.current = true;
+      }
+    };
+
+    const events = ['click', 'touchstart', 'keydown'];
+    events.forEach((evt) => window.addEventListener(evt, unlockAudio, { passive: true }));
+
+    return () => {
+      events.forEach((evt) => window.removeEventListener(evt, unlockAudio));
+    };
+  }, []);
+
+  // Plays the notification sound safely: resets playback position so rapid
+  // consecutive messages retrigger cleanly (no overlapping instances), and
+  // swallows/logs any rejected play() promise so it never surfaces as an
+  // unhandled promise rejection or console error.
+  const playNotificationSound = () => {
+    const audio = notificationAudioRef.current;
+    if (!audio) return;
+    try {
+      audio.currentTime = 0;
+      const playPromise = audio.play();
+      if (playPromise && typeof playPromise.then === 'function') {
+        playPromise.catch((err) => {
+          console.warn('Notification sound could not play (likely blocked until user interacts with the page):', err);
+        });
+      }
+    } catch (err) {
+      console.warn('Notification sound playback error:', err);
+    }
+  };
+
   // Toast System Handler Utility Function
   const showToast = (msg) => {
     setToastMessage(msg);
@@ -51,12 +137,40 @@ export default function Home() {
   useEffect(() => {
     let internalTimer;
     if (userProfile?.userId && activeChatMatch?.userId) {
+      // A new conversation was opened (chat switch, or first open after refresh/reconnect):
+      // reset the "seen messages" tracking so history isn't mistaken for new incoming messages.
+      const chatKey = `${userProfile.userId}::${activeChatMatch.userId}`;
+      if (activeChatKeyRef.current !== chatKey) {
+        activeChatKeyRef.current = chatKey;
+        seenMessageIdsRef.current = null;
+      }
+
       const loadMessages = async () => {
         try {
           const res = await fetch(`/api/messages?senderId=${encodeURIComponent(userProfile.userId)}&receiverId=${encodeURIComponent(activeChatMatch.userId)}`);
           const data = await res.json();
           if (data.success) {
-            setChatLogs(data.messages);
+            const incomingMessages = Array.isArray(data.messages) ? data.messages : [];
+            const isFirstLoadForThisChat = seenMessageIdsRef.current === null;
+            const previouslySeenIds = seenMessageIdsRef.current || new Set();
+
+            if (!isFirstLoadForThisChat) {
+              // Only notify for messages that are (a) not from the current user and
+              // (b) not already accounted for, so refreshes/reconnects/re-polls never
+              // replay sounds for old messages, and multiple new messages in one poll
+              // still trigger just a single, non-overlapping notification.
+              const hasNewIncomingMessage = incomingMessages.some(
+                (msg) =>
+                  String(msg.senderId) !== String(userProfile.userId) &&
+                  !previouslySeenIds.has(String(msg._id))
+              );
+              if (hasNewIncomingMessage) {
+                playNotificationSound();
+              }
+            }
+
+            seenMessageIdsRef.current = new Set(incomingMessages.map((msg) => String(msg._id)));
+            setChatLogs(incomingMessages);
           }
         } catch (err) {
           console.error("Failed syncing chat records:", err);
@@ -67,6 +181,8 @@ export default function Home() {
       internalTimer = setInterval(loadMessages, 3500);
     } else {
       setChatLogs([]);
+      seenMessageIdsRef.current = null;
+      activeChatKeyRef.current = null;
     }
     return () => clearInterval(internalTimer);
   }, [activeChatMatch, userProfile]);
