@@ -463,8 +463,26 @@ export default function Home() {
     return url;
   };
 
+  // Structured JSON-LD Schema for Generative Engine Optimization (GEO)
+  const schemaOrgData = {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "VibeKey",
+    "alternateName": "VibeKey - AI Network for Careers, Community & Connections",
+    "applicationCategory": "SocialNetworkingApplication",
+    "operatingSystem": "Web",
+    "description": "VibeKey is an open-ended social and professional networking platform that uses AI vector matching to connect young adults for career opportunities, friendships, and meaningful relationships.",
+    "keywords": "AI social network, professional networking for young adults, friendship and networking app, smart matchmaking platform"
+  };
+
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4 md:p-8 selection:bg-rose-500/30">
+      
+      {/* GEO & AI ENGINE SEARCH INDEXING METADATA */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(schemaOrgData) }}
+      />
       
       {/* GLOBAL NOTIFICATION SYSTEM BANNER FLOATER */}
       {toastMessage && (
@@ -474,11 +492,23 @@ export default function Home() {
       )}
 
       {/* Dynamic Branding Layout Grid */}
-      <div className="text-center mb-8 max-w-xl">
-        <h1 className="text-4xl md:text-5xl font-black tracking-tight bg-gradient-to-r from-rose-400 via-amber-400 to-emerald-400 bg-clip-text text-transparent">
-          Bandhan Matrix Engine
+      <div className="text-center mb-8 max-w-3xl px-2">
+        <h1 className="text-3xl md:text-5xl font-black tracking-tight bg-gradient-to-r from-rose-400 via-amber-400 to-emerald-400 bg-clip-text text-transparent">
+          VibeKey
         </h1>
-        <p className="text-sm text-slate-400 mt-2">Intelligent profile structural matching layer framework.</p>
+        <h2 className="text-base md:text-lg font-bold text-slate-300 mt-2">
+          VibeKey - AI Network for Careers, Community & Connections
+        </h2>
+        
+        {/* GEO Definition Statement Banner & Visually Styled Target Hashtag Badges */}
+        <div className="w-full max-w-2xl mx-auto my-4 text-center">
+          <p className="text-xs text-slate-400 italic leading-relaxed bg-slate-900/80 p-4 rounded-xl border border-slate-800 shadow-inner">
+            &ldquo;VibeKey is an open-ended social and professional networking platform that uses AI vector matching to connect young adults for career opportunities, friendships, and meaningful relationships.&rdquo;
+          </p>
+         </div>
+        </div>
+<div className="flex flex-wrap justify-center gap-2 mt-3">
+            
       </div>
 
       {error && (
@@ -493,7 +523,7 @@ export default function Home() {
           
           {step === 'EMAIL' && (
             <form onSubmit={handleRequestOtp} className="space-y-5">
-              <h2 className="text-xl font-bold text-slate-200 border-b border-slate-800 pb-3">Sign In / Join Gateway</h2>
+              <h3 className="text-xl font-bold text-slate-200 border-b border-slate-800 pb-3">Sign In / Join VibeKey</h3>
               <div className="space-y-1.5">
                 <label className="text-xs uppercase font-extrabold text-slate-400 block">User Email ID</label>
                 <input type="email" required placeholder="name@domain.com" value={inputEmail} onChange={(e) => setInputEmail(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-sm font-mono focus:border-rose-500/50 focus:outline-none" />
@@ -506,7 +536,7 @@ export default function Home() {
 
           {step === 'OTP' && (
             <form onSubmit={handleVerifyOtp} className="space-y-5 text-center">
-              <h2 className="text-xl font-bold text-slate-200">Gateway Token Authentication</h2>
+              <h3 className="text-xl font-bold text-slate-200">Gateway Token Authentication</h3>
               <p className="text-xs text-slate-400">Input security code verification matrix pin sent to:</p>
               <span className="text-rose-400 font-bold font-mono text-xs bg-slate-950 px-3 py-1 rounded-md border border-slate-800">{inputEmail}</span>
               
@@ -526,7 +556,7 @@ export default function Home() {
               <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-xs text-amber-400 font-medium text-center">
                 ✨ Account node mapping entry clean. Finish setting up profile data.
               </div>
-              <h2 className="text-xl font-bold text-slate-200 border-b border-slate-800 pb-2">Complete Profile Setup</h2>
+              <h3 className="text-xl font-bold text-slate-200 border-b border-slate-800 pb-2">Complete Profile Setup</h3>
               
               <div className="space-y-1">
                 <label className="text-xs uppercase font-extrabold text-slate-400 block">Full Name</label>
@@ -534,8 +564,8 @@ export default function Home() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs uppercase font-extrabold text-slate-400 block">Core Profession</label>
-                <input type="text" required placeholder="e.g. Software Engineer, Analyst" value={registerForm.profession} onChange={(e) => setRegisterForm(prev => ({ ...prev, profession: e.target.value }))} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-rose-500/50" />
+                <label className="text-xs uppercase font-extrabold text-slate-400 block">Core Profession / Role</label>
+                <input type="text" required placeholder="e.g. Software Engineer, Student, Founder" value={registerForm.profession} onChange={(e) => setRegisterForm(prev => ({ ...prev, profession: e.target.value }))} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-rose-500/50" />
               </div>
 
               {/* Profile Photo File Upload Field */}
@@ -560,8 +590,8 @@ export default function Home() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs uppercase font-extrabold text-slate-400 block">Character Target Bio</label>
-                <textarea required rows={3} placeholder="Express traits, occupation context or core vision variables..." value={registerForm.rawBio} onChange={(e) => setRegisterForm(prev => ({ ...prev, rawBio: e.target.value }))} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm resize-none focus:outline-none focus:border-rose-500/50" />
+                <label className="text-xs uppercase font-extrabold text-slate-400 block">Bio & Connection Interests</label>
+                <textarea required rows={3} placeholder="Tell us about yourself, career goals, or what brings you to VibeKey..." value={registerForm.rawBio} onChange={(e) => setRegisterForm(prev => ({ ...prev, rawBio: e.target.value }))} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm resize-none focus:outline-none focus:border-rose-500/50" />
               </div>
 
               <button type="submit" disabled={loading} className="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-sm rounded-xl transition">
@@ -599,7 +629,7 @@ export default function Home() {
               )}
               
               <h3 className="text-xl font-black text-white truncate">{userProfile.name}</h3>
-              <p className="text-xs text-rose-400 font-bold mb-1 tracking-wide">{userProfile.profession || 'Developer'}</p>
+              <p className="text-xs text-rose-400 font-bold mb-1 tracking-wide">{userProfile.profession || 'Professional'}</p>
               <p className="text-xs text-slate-500 mb-4 font-mono truncate">{userProfile.userId}</p>
               
               <div className="space-y-3 text-left bg-slate-950/40 p-4 rounded-xl border border-slate-800/60 text-xs font-medium mb-4">
@@ -637,12 +667,12 @@ export default function Home() {
             {/* Real-time Cluster Query Interface Box */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-md flex flex-col sm:flex-row gap-3 items-end">
               <div className="w-full sm:w-1/2 space-y-1">
-                <label className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Filter by Profession</label>
-                <input type="text" placeholder="e.g. Engineer, Designer" value={searchProfession} onChange={(e) => setSearchProfession(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-rose-500/30" />
+                <label className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Filter by Profession / Industry</label>
+                <input type="text" placeholder="e.g. Engineer, Student, Creator" value={searchProfession} onChange={(e) => setSearchProfession(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-rose-500/30" />
               </div>
               <div className="w-full sm:w-1/2 space-y-1">
                 <label className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Keyword Search</label>
-                <input type="text" placeholder="Search names or bio details..." value={searchKeyword} onChange={(e) => setSearchKeyword(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-rose-500/30" />
+                <input type="text" placeholder="Search names, interests or bio details..." value={searchKeyword} onChange={(e) => setSearchKeyword(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-rose-500/30" />
               </div>
               <button onClick={handleApplyFilters} disabled={loading} className="w-full sm:w-auto px-5 py-2 bg-gradient-to-r from-rose-500 to-amber-500 text-white font-bold text-xs rounded-xl shadow transition whitespace-nowrap disabled:opacity-50">
                 {loading ? 'Filtering...' : 'Apply Filters'}
@@ -650,7 +680,7 @@ export default function Home() {
             </div>
 
             <h3 className="text-2xl font-black text-slate-100 flex items-center justify-between px-1">
-              <span>AI Core Matches</span>
+              <span>AI Vector Matches</span>
               <span className="text-xs bg-rose-500/10 text-rose-400 border border-rose-500/20 px-3 py-1 rounded-full font-bold">
                 {matches?.length || 0} Vector Matches Loaded
               </span>
@@ -672,7 +702,7 @@ export default function Home() {
                       )}
                       <div>
                         <h4 className="text-md font-bold text-slate-100 tracking-tight">{item.name}</h4>
-                        <p className="text-xs text-amber-400 font-semibold">{item.profession || 'Partner'}</p>
+                        <p className="text-xs text-amber-400 font-semibold">{item.profession || 'Connection'}</p>
                       </div>
                     </div>
                     <div className="text-right">
@@ -738,7 +768,7 @@ export default function Home() {
                 <input type="text" required value={editForm.name} onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-100 focus:outline-none focus:border-rose-500/40" />
               </div>
               <div>
-                <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Core Professional Stack Vector</label>
+                <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Core Professional / Interest Vector</label>
                 <input type="text" required value={editForm.profession} onChange={(e) => setEditForm(prev => ({ ...prev, profession: e.target.value }))} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-100 focus:outline-none focus:border-rose-500/40" />
               </div>
               
@@ -785,7 +815,7 @@ export default function Home() {
               </div>
 
               <div>
-                <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Biographical Context Data</label>
+                <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Biographical & Goals Context Data</label>
                 <textarea required rows={3} value={editForm.rawBio} onChange={(e) => setEditForm(prev => ({ ...prev, rawBio: e.target.value }))} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-100 resize-none focus:outline-none focus:border-rose-500/40" />
               </div>
               
