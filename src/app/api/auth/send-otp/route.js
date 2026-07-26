@@ -43,12 +43,12 @@ export async function POST(req) {
 
     // 4. Build output layout layout blueprint template element data
     const mailOptions = {
-      from: `"Bandhan Matrix Engine" <${smtpEmail}>`,
+      from: `"VibeKey" <${smtpEmail}>`,
       to: email,
       subject: '🔒 Secure Core Node Verification Access Token',
       html: `
         <div style="font-family: sans-serif; background-color: #020617; color: #f8fafc; padding: 32px; border-radius: 16px; max-width: 480px; margin: 0 auto; border: 1px solid #1e293b;">
-          <h2 style="color: #fb7185; margin-bottom: 4px; font-size: 24px; font-weight: 900;">Bandhan Matrix Engine</h2>
+          <h2 style="color: #fb7185; margin-bottom: 4px; font-size: 24px; font-weight: 900;">VibeKey</h2>
           <hr style="border: 0; border-top: 1px solid #334155; margin: 20px 0;" />
           <p style="font-size: 14px; color: #cbd5e1;">Use this secure access verification token code:</p>
           <div style="background-color: #0f172a; border: 1px solid #fb7185; padding: 16px; text-align: center; border-radius: 12px; margin: 24px 0;">
