@@ -476,76 +476,86 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4 md:p-8 selection:bg-rose-500/30">
-      
+    <main className="min-h-screen bg-[#FAF8F5] text-[#1B1B1D] flex flex-col items-center justify-center p-4 md:p-8 selection:bg-[#EF3E56]/20">
+
+      {/* FONT IMPORTS */}
+      <style jsx global>{`
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+        .font-display { font-family: 'Poppins', sans-serif; }
+        .font-body { font-family: 'Inter', sans-serif; }
+      `}</style>
+
       {/* GEO & AI ENGINE SEARCH INDEXING METADATA */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(schemaOrgData) }}
       />
-      
+
       {/* GLOBAL NOTIFICATION SYSTEM BANNER FLOATER */}
       {toastMessage && (
-        <div className="fixed top-5 right-5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-bold font-mono px-5 py-3 rounded-xl shadow-2xl border border-emerald-500/30 z-50 animate-in fade-in slide-in-from-top-3 duration-200">
-          🛰️ Core Log Matrix: {toastMessage}
+        <div className="fixed top-5 right-5 bg-white text-[#1B1B1D] text-xs font-bold font-body px-5 py-3 rounded-full shadow-[0_8px_24px_rgba(0,0,0,0.12)] border border-[#ECE9E4] z-50 animate-in fade-in slide-in-from-top-3 duration-200 flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-[#EF3E56]" />
+          {toastMessage}
         </div>
       )}
 
       {/* Dynamic Branding Layout Grid */}
-      <div className="text-center mb-8 max-w-3xl px-2">
-        <h1 className="text-3xl md:text-5xl font-black tracking-tight bg-gradient-to-r from-rose-400 via-amber-400 to-emerald-400 bg-clip-text text-transparent">
-          VibeKey
-        </h1>
-        <h2 className="text-base md:text-lg font-bold text-slate-300 mt-2">
-          VibeKey - AI Network for Careers, Community & Connections
-        </h2>
-        
-        {/* GEO Definition Statement Banner & Visually Styled Target Hashtag Badges */}
-        <div className="w-full max-w-2xl mx-auto my-4 text-center">
-          <p className="text-xs text-slate-400 italic leading-relaxed bg-slate-900/80 p-4 rounded-xl border border-slate-800 shadow-inner">
-            &ldquo;VibeKey is an open-ended social and professional networking platform that uses AI vector matching to connect young adults for career opportunities, friendships, and meaningful relationships.&rdquo;
-          </p>
-         </div>
+      <div className="text-center mb-10 max-w-3xl px-2">
+        <div className="inline-flex items-center gap-2 mb-4 px-4 py-1.5 rounded-full bg-[#FFF1E9] border border-[#FFD9C2]">
+          <span className="w-2 h-2 rounded-full bg-[#EF3E56]" />
+          <span className="text-[11px] font-body font-bold tracking-wide text-[#B23349] uppercase">Made for real connections</span>
         </div>
-<div className="flex flex-wrap justify-center gap-2 mt-3">
-            
+
+        <h1 className="font-display text-4xl md:text-6xl font-extrabold tracking-tight text-[#1B1B1D]">
+          Vibe<span className="text-[#EF3E56]">Key</span>
+        </h1>
+        <h2 className="font-body text-base md:text-lg font-medium text-[#6E6D72] mt-3 max-w-xl mx-auto">
+          Where careers, community, and real connections come together.
+        </h2>
+
+        {/* GEO Definition Statement Banner */}
+        <div className="w-full max-w-2xl mx-auto my-6 text-center">
+          <p className="font-body text-xs text-[#6E6D72] leading-relaxed bg-white p-4 rounded-2xl border border-[#ECE9E4] shadow-[0_2px_10px_rgba(0,0,0,0.03)]">
+            VibeKey is an open-ended social and professional networking platform that uses AI vector matching to connect young adults for career opportunities, friendships, and meaningful relationships.
+          </p>
+        </div>
       </div>
 
       {error && (
-        <div className="w-full max-w-md bg-rose-500/10 border border-rose-500/20 text-rose-400 p-4 rounded-xl text-sm font-semibold mb-6">
-          ⚠️ Operational Exception: {error}
+        <div className="w-full max-w-md bg-[#FDECEC] border border-[#F6C4C9] text-[#C4283F] p-4 rounded-2xl text-sm font-semibold mb-6 font-body">
+          ⚠️ {error}
         </div>
       )}
 
       {/* STEP CONFIGURATOR ROUTING GATEWAY MODAL */}
       {!userProfile && (
-        <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 md:p-8 shadow-2xl">
+        <div className="w-full max-w-md bg-white border border-[#ECE9E4] rounded-3xl p-6 md:p-8 shadow-[0_12px_40px_rgba(0,0,0,0.06)]">
           
           {step === 'EMAIL' && (
             <form onSubmit={handleRequestOtp} className="space-y-5">
-              <h3 className="text-xl font-bold text-slate-200 border-b border-slate-800 pb-3">Sign In / Join VibeKey</h3>
+              <h3 className="font-display text-xl font-bold text-[#1B1B1D] border-b border-[#ECE9E4] pb-3">Sign in or join VibeKey</h3>
               <div className="space-y-1.5">
-                <label className="text-xs uppercase font-extrabold text-slate-400 block">User Email ID</label>
-                <input type="email" required placeholder="name@domain.com" value={inputEmail} onChange={(e) => setInputEmail(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-100 text-sm font-mono focus:border-rose-500/50 focus:outline-none" />
+                <label className="text-xs uppercase font-bold text-[#6E6D72] block tracking-wide font-body">Email address</label>
+                <input type="email" required placeholder="name@domain.com" value={inputEmail} onChange={(e) => setInputEmail(e.target.value)} className="w-full bg-[#FAF8F5] border border-[#ECE9E4] rounded-xl px-4 py-2.5 text-[#1B1B1D] text-sm font-body focus:border-[#EF3E56] focus:outline-none focus:ring-2 focus:ring-[#EF3E56]/15 transition" />
               </div>
-              <button type="submit" disabled={loading} className="w-full py-3 bg-gradient-to-r from-rose-500 to-amber-500 text-white font-bold text-sm rounded-xl transition disabled:opacity-50">
-                {loading ? 'Dispatched Access Arrays...' : 'Send Verification OTP'}
+              <button type="submit" disabled={loading} className="w-full py-3 bg-[#EF3E56] hover:bg-[#D42E44] text-white font-display font-bold text-sm rounded-full transition disabled:opacity-50 shadow-[0_8px_20px_rgba(239,62,86,0.3)]">
+                {loading ? 'Sending code…' : 'Send verification code'}
               </button>
             </form>
           )}
 
           {step === 'OTP' && (
             <form onSubmit={handleVerifyOtp} className="space-y-5 text-center">
-              <h3 className="text-xl font-bold text-slate-200">Gateway Token Authentication</h3>
-              <p className="text-xs text-slate-400">Input security code verification matrix pin sent to:</p>
-              <span className="text-rose-400 font-bold font-mono text-xs bg-slate-950 px-3 py-1 rounded-md border border-slate-800">{inputEmail}</span>
+              <h3 className="font-display text-xl font-bold text-[#1B1B1D]">Enter your code</h3>
+              <p className="text-xs text-[#6E6D72] font-body">We sent a verification code to:</p>
+              <span className="text-[#EF3E56] font-bold font-body text-xs bg-[#FFF1E9] px-3 py-1 rounded-full border border-[#FFD9C2] inline-block">{inputEmail}</span>
               
-              <input type="text" maxLength={6} required placeholder="******" value={otpCode} onChange={(e) => setOtpCode(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 text-center text-2xl font-black tracking-widest text-emerald-400 focus:outline-none focus:border-emerald-500 font-mono" />
+              <input type="text" maxLength={6} required placeholder="******" value={otpCode} onChange={(e) => setOtpCode(e.target.value)} className="w-full bg-[#FAF8F5] border border-[#ECE9E4] rounded-xl py-3 text-center text-2xl font-bold tracking-widest text-[#1B1B1D] focus:outline-none focus:border-[#EF3E56] font-display" />
               
               <div className="flex gap-3">
-                <button type="button" onClick={() => setStep('EMAIL')} className="w-1/2 py-2.5 bg-slate-800 text-slate-300 rounded-xl text-xs font-bold border border-slate-700 transition hover:bg-slate-700">Back</button>
-                <button type="submit" disabled={loading} className="w-1/2 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition">
-                  {loading ? 'Verifying...' : 'Verify & Continue'}
+                <button type="button" onClick={() => setStep('EMAIL')} className="w-1/2 py-2.5 bg-[#F1EFEB] text-[#1B1B1D] rounded-full text-xs font-bold border border-[#ECE9E4] transition hover:bg-[#E9E6E1] font-display">Back</button>
+                <button type="submit" disabled={loading} className="w-1/2 py-2.5 bg-[#EF3E56] hover:bg-[#D42E44] text-white rounded-full text-xs font-bold transition shadow-[0_8px_20px_rgba(239,62,86,0.3)] font-display">
+                  {loading ? 'Verifying…' : 'Verify & continue'}
                 </button>
               </div>
             </form>
@@ -553,49 +563,49 @@ export default function Home() {
 
           {step === 'REGISTER' && (
             <form onSubmit={handleRegisterProfileSubmit} className="space-y-4">
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-xs text-amber-400 font-medium text-center">
-                ✨ Account node mapping entry clean. Finish setting up profile data.
+              <div className="bg-[#FFF1E9] border border-[#FFD9C2] rounded-xl p-3 text-xs text-[#B23349] font-semibold text-center font-body">
+                🎉 You're in — let's finish setting up your profile.
               </div>
-              <h3 className="text-xl font-bold text-slate-200 border-b border-slate-800 pb-2">Complete Profile Setup</h3>
+              <h3 className="font-display text-xl font-bold text-[#1B1B1D] border-b border-[#ECE9E4] pb-2">Complete your profile</h3>
               
               <div className="space-y-1">
-                <label className="text-xs uppercase font-extrabold text-slate-400 block">Full Name</label>
-                <input type="text" required placeholder="Display Name String" value={registerForm.name} onChange={(e) => setRegisterForm(prev => ({ ...prev, name: e.target.value }))} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-rose-500/50" />
+                <label className="text-xs uppercase font-bold text-[#6E6D72] block tracking-wide font-body">Full name</label>
+                <input type="text" required placeholder="Display name" value={registerForm.name} onChange={(e) => setRegisterForm(prev => ({ ...prev, name: e.target.value }))} className="w-full bg-[#FAF8F5] border border-[#ECE9E4] rounded-xl px-4 py-2 text-sm text-[#1B1B1D] focus:outline-none focus:border-[#EF3E56] font-body" />
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs uppercase font-extrabold text-slate-400 block">Core Profession / Role</label>
-                <input type="text" required placeholder="e.g. Software Engineer, Student, Founder" value={registerForm.profession} onChange={(e) => setRegisterForm(prev => ({ ...prev, profession: e.target.value }))} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-rose-500/50" />
+                <label className="text-xs uppercase font-bold text-[#6E6D72] block tracking-wide font-body">Profession or role</label>
+                <input type="text" required placeholder="e.g. Software Engineer, Student, Founder" value={registerForm.profession} onChange={(e) => setRegisterForm(prev => ({ ...prev, profession: e.target.value }))} className="w-full bg-[#FAF8F5] border border-[#ECE9E4] rounded-xl px-4 py-2 text-sm text-[#1B1B1D] focus:outline-none focus:border-[#EF3E56] font-body" />
               </div>
 
               {/* Profile Photo File Upload Field */}
               <div className="space-y-1">
-                <label className="text-xs uppercase font-extrabold text-slate-400 block">Profile Photo Upload</label>
+                <label className="text-xs uppercase font-bold text-[#6E6D72] block tracking-wide font-body">Profile photo</label>
                 <input 
                   type="file" 
                   accept=".jpg,.jpeg,.png" 
                   onChange={(e) => handlePhotoUpload(e, setRegisterForm, setRegisterImageError)} 
-                  className="w-full text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-slate-800 file:text-slate-200 hover:file:bg-slate-700 cursor-pointer bg-slate-950 border border-slate-800 rounded-xl p-1" 
+                  className="w-full text-xs text-[#6E6D72] file:mr-3 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-[#EF3E56] file:text-white hover:file:bg-[#D42E44] cursor-pointer bg-[#FAF8F5] border border-[#ECE9E4] rounded-xl p-1 font-body" 
                 />
-                <p className="text-[10px] text-slate-500">Formats: .jpg, .jpeg, .png (Max limit: 200 KB)</p>
+                <p className="text-[10px] text-[#9B9A9D] font-body">Formats: .jpg, .jpeg, .png (max 200 KB)</p>
                 {registerImageError && (
-                  <p className="text-xs text-rose-400 font-semibold mt-1">{registerImageError}</p>
+                  <p className="text-xs text-[#C4283F] font-semibold mt-1 font-body">{registerImageError}</p>
                 )}
                 {registerForm.photoUrl && (
                   <div className="mt-2 flex items-center gap-3">
-                    <img src={registerForm.photoUrl} alt="Preview" className="w-12 h-12 rounded-full object-cover border border-rose-500" />
-                    <span className="text-[10px] text-emerald-400 font-mono font-bold">Image Preview Ready</span>
+                    <img src={registerForm.photoUrl} alt="Preview" className="w-12 h-12 rounded-full object-cover border-2 border-[#EF3E56]" />
+                    <span className="text-[10px] text-[#1E9E6B] font-body font-bold">Looking good!</span>
                   </div>
                 )}
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs uppercase font-extrabold text-slate-400 block">Bio & Connection Interests</label>
-                <textarea required rows={3} placeholder="Tell us about yourself, career goals, or what brings you to VibeKey..." value={registerForm.rawBio} onChange={(e) => setRegisterForm(prev => ({ ...prev, rawBio: e.target.value }))} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm resize-none focus:outline-none focus:border-rose-500/50" />
+                <label className="text-xs uppercase font-bold text-[#6E6D72] block tracking-wide font-body">Bio & interests</label>
+                <textarea required rows={3} placeholder="Tell us about yourself, career goals, or what brings you to VibeKey..." value={registerForm.rawBio} onChange={(e) => setRegisterForm(prev => ({ ...prev, rawBio: e.target.value }))} className="w-full bg-[#FAF8F5] border border-[#ECE9E4] rounded-xl px-4 py-2 text-sm text-[#1B1B1D] resize-none focus:outline-none focus:border-[#EF3E56] font-body" />
               </div>
 
-              <button type="submit" disabled={loading} className="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-sm rounded-xl transition">
-                {loading ? 'Instantiating Profile...' : 'Create Account & Login'}
+              <button type="submit" disabled={loading} className="w-full py-3 bg-[#EF3E56] hover:bg-[#D42E44] text-white font-display font-bold text-sm rounded-full transition shadow-[0_8px_20px_rgba(239,62,86,0.3)]">
+                {loading ? 'Creating profile…' : 'Create account & log in'}
               </button>
             </form>
           )}
@@ -608,55 +618,55 @@ export default function Home() {
         <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-3 gap-6">
           
           {/* User Profile Metrics Display Drawer */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 h-fit flex flex-col justify-between shadow-xl">
+          <div className="bg-white border border-[#ECE9E4] rounded-3xl p-6 h-fit flex flex-col justify-between shadow-[0_8px_30px_rgba(0,0,0,0.05)]">
             <div>
               {userProfile.photoUrl ? (
                 <img 
                   src={getDirectDriveUrl(userProfile.photoUrl)} 
                   alt={userProfile.name} 
-                  className="w-24 h-24 rounded-full object-cover border-2 border-rose-500 mb-4 mx-auto md:mx-0 shadow-lg" 
+                  className="w-24 h-24 rounded-full object-cover border-4 border-[#FFF1E9] mb-4 mx-auto md:mx-0 shadow-sm" 
                   onError={(e) => {
                     e.target.onerror = null;
                     e.target.style.display = 'none';
                     const fallbackEl = document.createElement('div');
-                    fallbackEl.className = "w-24 h-24 rounded-full bg-amber-500/10 text-amber-400 flex items-center justify-center mb-4 mx-auto md:mx-0 border border-amber-500/20 text-[10px] p-2 font-bold text-center";
-                    fallbackEl.innerText = "Verify Link Permissions";
+                    fallbackEl.className = "w-24 h-24 rounded-full bg-[#FFF1E9] text-[#B23349] flex items-center justify-center mb-4 mx-auto md:mx-0 border border-[#FFD9C2] text-[10px] p-2 font-bold text-center font-body";
+                    fallbackEl.innerText = "Verify link permissions";
                     e.target.parentNode.insertBefore(fallbackEl, e.target);
                   }}
                 />
               ) : (
-                <div className="w-24 h-24 rounded-full bg-slate-800 flex items-center justify-center mb-4 mx-auto md:mx-0 text-slate-500 text-xs font-bold border border-slate-700">NO IMAGE</div>
+                <div className="w-24 h-24 rounded-full bg-[#F1EFEB] flex items-center justify-center mb-4 mx-auto md:mx-0 text-[#9B9A9D] text-xs font-bold border border-[#ECE9E4] font-body">NO IMAGE</div>
               )}
               
-              <h3 className="text-xl font-black text-white truncate">{userProfile.name}</h3>
-              <p className="text-xs text-rose-400 font-bold mb-1 tracking-wide">{userProfile.profession || 'Professional'}</p>
-              <p className="text-xs text-slate-500 mb-4 font-mono truncate">{userProfile.userId}</p>
+              <h3 className="font-display text-xl font-bold text-[#1B1B1D] truncate text-center md:text-left">{userProfile.name}</h3>
+              <p className="text-xs text-[#EF3E56] font-bold mb-1 tracking-wide font-body uppercase text-center md:text-left">{userProfile.profession || 'Professional'}</p>
+              <p className="text-xs text-[#9B9A9D] mb-4 font-body truncate text-center md:text-left">{userProfile.userId}</p>
               
-              <div className="space-y-3 text-left bg-slate-950/40 p-4 rounded-xl border border-slate-800/60 text-xs font-medium mb-4">
+              <div className="space-y-3 text-left bg-[#FAF8F5] p-4 rounded-2xl border border-[#ECE9E4] text-xs font-medium mb-4 font-body">
                 <div>
-                  <span className="text-[10px] text-slate-500 block uppercase font-bold tracking-wider">Temperament Variant</span>
-                  <span className="text-amber-400 text-sm font-semibold">{userProfile.aiAnalysis?.temperament || 'Adaptive Matrix'}</span>
+                  <span className="text-[10px] text-[#9B9A9D] block uppercase font-bold tracking-wide">Temperament</span>
+                  <span className="text-[#B26A00] text-sm font-semibold">{userProfile.aiAnalysis?.temperament || 'Adaptive Matrix'}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-500 block uppercase font-bold tracking-wider">Trajectory Vector</span>
-                  <span className="text-emerald-400 text-sm font-semibold">{userProfile.aiAnalysis?.vision || 'Innovation Target'}</span>
+                  <span className="text-[10px] text-[#9B9A9D] block uppercase font-bold tracking-wide">Trajectory</span>
+                  <span className="text-[#1E9E6B] text-sm font-semibold">{userProfile.aiAnalysis?.vision || 'Innovation Target'}</span>
                 </div>
               </div>
 
               <button 
                 onClick={() => setIsEditModalOpen(true)}
-                className="w-full py-2 bg-gradient-to-r from-amber-500/20 to-rose-500/20 text-slate-200 border border-rose-500/30 font-bold text-xs rounded-xl hover:bg-rose-500/20 transition duration-150 mb-2"
+                className="w-full py-2 bg-[#FFF1E9] hover:bg-[#FFE4D3] text-[#B23349] border border-[#FFD9C2] font-display font-bold text-xs rounded-full transition duration-150 mb-2"
               >
-                📝 Mutate Profile Specifications
+                📝 Edit profile
               </button>
             </div>
 
-            <div className="mt-6 pt-4 border-t border-slate-800/80 space-y-2">
-              <button onClick={handleLogOut} className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition">
-                🚪 Log Off Engine Node
+            <div className="mt-6 pt-4 border-t border-[#ECE9E4] space-y-2">
+              <button onClick={handleLogOut} className="w-full py-2.5 bg-[#F1EFEB] hover:bg-[#E9E6E1] text-[#1B1B1D] text-xs font-bold rounded-full transition font-display border border-[#ECE9E4]">
+                Log out
               </button>
-              <button onClick={handleDeleteProfile} disabled={loading} className="w-full py-2.5 bg-rose-950/40 hover:bg-rose-900/40 text-rose-400 text-xs font-bold rounded-xl border border-rose-900/50 transition">
-                🗑️ Delete Profile Matrix
+              <button onClick={handleDeleteProfile} disabled={loading} className="w-full py-2.5 bg-white hover:bg-[#FDECEC] text-[#C4283F] text-xs font-bold rounded-full border border-[#F6C4C9] transition font-display">
+                Delete profile
               </button>
             </div>
           </div>
@@ -665,72 +675,72 @@ export default function Home() {
           <div className="md:col-span-2 space-y-4">
             
             {/* Real-time Cluster Query Interface Box */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-md flex flex-col sm:flex-row gap-3 items-end">
+            <div className="bg-white border border-[#ECE9E4] rounded-3xl p-4 shadow-[0_8px_30px_rgba(0,0,0,0.04)] flex flex-col sm:flex-row gap-3 items-end">
               <div className="w-full sm:w-1/2 space-y-1">
-                <label className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Filter by Profession / Industry</label>
-                <input type="text" placeholder="e.g. Engineer, Student, Creator" value={searchProfession} onChange={(e) => setSearchProfession(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-rose-500/30" />
+                <label className="text-[10px] uppercase font-bold text-[#6E6D72] block tracking-wide font-body">Filter by profession</label>
+                <input type="text" placeholder="e.g. Engineer, Student, Creator" value={searchProfession} onChange={(e) => setSearchProfession(e.target.value)} className="w-full bg-[#FAF8F5] border border-[#ECE9E4] rounded-xl px-3 py-2 text-xs text-[#1B1B1D] focus:outline-none focus:border-[#EF3E56] font-body" />
               </div>
               <div className="w-full sm:w-1/2 space-y-1">
-                <label className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Keyword Search</label>
-                <input type="text" placeholder="Search names, interests or bio details..." value={searchKeyword} onChange={(e) => setSearchKeyword(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-rose-500/30" />
+                <label className="text-[10px] uppercase font-bold text-[#6E6D72] block tracking-wide font-body">Keyword search</label>
+                <input type="text" placeholder="Search names, interests or bio details..." value={searchKeyword} onChange={(e) => setSearchKeyword(e.target.value)} className="w-full bg-[#FAF8F5] border border-[#ECE9E4] rounded-xl px-3 py-2 text-xs text-[#1B1B1D] focus:outline-none focus:border-[#EF3E56] font-body" />
               </div>
-              <button onClick={handleApplyFilters} disabled={loading} className="w-full sm:w-auto px-5 py-2 bg-gradient-to-r from-rose-500 to-amber-500 text-white font-bold text-xs rounded-xl shadow transition whitespace-nowrap disabled:opacity-50">
-                {loading ? 'Filtering...' : 'Apply Filters'}
+              <button onClick={handleApplyFilters} disabled={loading} className="w-full sm:w-auto px-5 py-2 bg-[#EF3E56] hover:bg-[#D42E44] text-white font-display font-bold text-xs rounded-full shadow-[0_8px_20px_rgba(239,62,86,0.3)] transition whitespace-nowrap disabled:opacity-50">
+                {loading ? 'Filtering…' : 'Apply filters'}
               </button>
             </div>
 
-            <h3 className="text-2xl font-black text-slate-100 flex items-center justify-between px-1">
-              <span>AI Vector Matches</span>
-              <span className="text-xs bg-rose-500/10 text-rose-400 border border-rose-500/20 px-3 py-1 rounded-full font-bold">
-                {matches?.length || 0} Vector Matches Loaded
+            <h3 className="font-display text-2xl font-bold text-[#1B1B1D] flex items-center justify-between px-1">
+              <span>Your matches</span>
+              <span className="text-xs bg-[#FFF1E9] text-[#B23349] border border-[#FFD9C2] px-3 py-1 rounded-full font-bold font-body">
+                {matches?.length || 0} found
               </span>
             </h3>
 
             {(!matches || matches.length === 0) ? (
-              <div className="bg-slate-900/40 border border-dashed border-slate-800 text-center p-12 rounded-2xl">
-                <p className="text-slate-400 text-sm">Cluster database matching records indexing space empty.</p>
+              <div className="bg-white border border-dashed border-[#ECE9E4] text-center p-12 rounded-3xl">
+                <p className="text-[#6E6D72] text-sm font-body">No matches yet — try adjusting your filters or check back soon.</p>
               </div>
             ) : (
               matches.map((item) => (
-                <div key={item.id} className="bg-slate-900 border border-slate-800/80 rounded-2xl p-5 shadow-md hover:border-slate-700 transition duration-200">
+                <div key={item.id} className="bg-white border border-[#ECE9E4] rounded-3xl p-5 shadow-[0_4px_18px_rgba(0,0,0,0.04)] hover:shadow-[0_10px_30px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition duration-200">
                   <div className="flex items-start justify-between gap-4 mb-3">
                     <div className="flex items-center gap-3.5">
                       {item.photoUrl ? (
-                        <img src={getDirectDriveUrl(item.photoUrl)} alt={item.name} className="w-12 h-12 rounded-full object-cover border border-slate-700 bg-slate-950 shadow" onError={(e) => { e.target.onerror = null; e.target.src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=80&h=80&q=80'; }} />
+                        <img src={getDirectDriveUrl(item.photoUrl)} alt={item.name} className="w-12 h-12 rounded-full object-cover border-2 border-[#FFF1E9]" onError={(e) => { e.target.onerror = null; e.target.src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=80&h=80&q=80'; }} />
                       ) : (
-                        <div className="w-12 h-12 rounded-full bg-slate-950 border border-slate-800 flex items-center justify-center text-slate-600 font-bold text-xs font-mono">AI</div>
+                        <div className="w-12 h-12 rounded-full bg-[#F1EFEB] border border-[#ECE9E4] flex items-center justify-center text-[#9B9A9D] font-bold text-xs font-body">AI</div>
                       )}
                       <div>
-                        <h4 className="text-md font-bold text-slate-100 tracking-tight">{item.name}</h4>
-                        <p className="text-xs text-amber-400 font-semibold">{item.profession || 'Connection'}</p>
+                        <h4 className="font-display text-md font-bold text-[#1B1B1D] tracking-tight">{item.name}</h4>
+                        <p className="text-xs text-[#B26A00] font-semibold font-body">{item.profession || 'Connection'}</p>
                       </div>
                     </div>
                     <div className="text-right">
-                      <span className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-500">{item.score}%</span>
-                      <span className="text-[9px] block text-slate-500 font-extrabold uppercase tracking-widest">Alignment Vector</span>
+                      <span className="text-xl font-bold font-display text-[#EF3E56]">{item.score}%</span>
+                      <span className="text-[9px] block text-[#9B9A9D] font-bold uppercase tracking-wide font-body">Match</span>
                     </div>
                   </div>
-                  <p className="text-xs text-slate-300 bg-slate-950/40 p-3.5 rounded-xl border border-slate-950/80 leading-relaxed">{item.bio}</p>
+                  <p className="text-xs text-[#4A4A4D] bg-[#FAF8F5] p-3.5 rounded-2xl border border-[#ECE9E4] leading-relaxed font-body">{item.bio}</p>
                   
                   {/* Dynamic AI Compatibility Accordion Element */}
-                  <div className="mt-3 bg-slate-950/80 border border-slate-800/80 rounded-xl overflow-hidden text-xs">
+                  <div className="mt-3 bg-[#FAF8F5] border border-[#ECE9E4] rounded-2xl overflow-hidden text-xs">
                     <details className="group">
-                      <summary className="flex items-center justify-between px-3 py-2 cursor-pointer select-none font-bold text-slate-400 hover:text-rose-400 transition">
-                        <span>🤖 View AI Core Compatibility Analysis</span>
+                      <summary className="flex items-center justify-between px-3 py-2 cursor-pointer select-none font-bold text-[#6E6D72] hover:text-[#EF3E56] transition font-display">
+                        <span>See why you match</span>
                         <span className="text-[10px] transition group-open:rotate-180">▼</span>
                       </summary>
-                      <div className="px-3 pb-3 pt-1 border-t border-slate-900 text-slate-300 space-y-2 font-medium">
-                        <p className="italic text-slate-400 leading-relaxed bg-slate-900/50 p-2 rounded-lg border border-slate-800/40">
+                      <div className="px-3 pb-3 pt-1 border-t border-[#ECE9E4] text-[#4A4A4D] space-y-2 font-medium font-body">
+                        <p className="italic text-[#6E6D72] leading-relaxed bg-white p-2 rounded-xl border border-[#ECE9E4]">
                           {item.aiAnalysis?.breakdown}
                         </p>
-                        <div className="grid grid-cols-2 gap-2 text-[10px] uppercase tracking-wider font-mono">
-                          <div className="bg-slate-900 p-2 rounded border border-slate-800/40">
-                            <span className="text-slate-500 block">Communication</span>
-                            <span className="text-emerald-400 block truncate font-bold">{item.aiAnalysis?.communication}</span>
+                        <div className="grid grid-cols-2 gap-2 text-[10px] uppercase tracking-wide font-body">
+                          <div className="bg-white p-2 rounded-lg border border-[#ECE9E4]">
+                            <span className="text-[#9B9A9D] block">Communication</span>
+                            <span className="text-[#1E9E6B] block truncate font-bold">{item.aiAnalysis?.communication}</span>
                           </div>
-                          <div className="bg-slate-900 p-2 rounded border border-slate-800/40">
-                            <span className="text-slate-500 block">Matrix Type</span>
-                            <span className="text-amber-400 block truncate font-bold">{item.aiAnalysis?.temperament}</span>
+                          <div className="bg-white p-2 rounded-lg border border-[#ECE9E4]">
+                            <span className="text-[#9B9A9D] block">Type</span>
+                            <span className="text-[#B26A00] block truncate font-bold">{item.aiAnalysis?.temperament}</span>
                           </div>
                         </div>
                       </div>
@@ -738,12 +748,12 @@ export default function Home() {
                   </div>
 
                   {/* Persistent Messaging Action Trigger */}
-                  <div className="mt-4 pt-3 border-t border-slate-800/60 flex justify-end">
+                  <div className="mt-4 pt-3 border-t border-[#ECE9E4] flex justify-end">
                     <button
                       onClick={() => setActiveChatMatch(item)}
-                      className="px-4 py-1.5 bg-slate-950 hover:bg-emerald-500/10 border border-slate-800 text-slate-300 hover:text-emerald-400 font-bold text-xs rounded-xl shadow transition duration-150"
+                      className="px-4 py-1.5 bg-[#EF3E56] hover:bg-[#D42E44] text-white font-display font-bold text-xs rounded-full shadow-[0_6px_16px_rgba(239,62,86,0.3)] transition duration-150"
                     >
-                      💬 Open Secure Signal Route
+                      Message
                     </button>
                   </div>
                 </div>
@@ -755,55 +765,55 @@ export default function Home() {
 
       {/* INTERACTIVE PROFILE SPECS EDITING MODAL BACKDROP CONTAINER */}
       {isEditModalOpen && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl relative animate-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 bg-[#1B1B1D]/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="w-full max-w-md bg-white border border-[#ECE9E4] rounded-3xl p-6 shadow-[0_20px_60px_rgba(0,0,0,0.15)] relative animate-in zoom-in-95 duration-150">
             
-            <h3 className="text-xl font-black text-slate-200 border-b border-slate-800 pb-2 mb-4">
-              📝 Edit Matrix Profile Specifications
+            <h3 className="font-display text-xl font-bold text-[#1B1B1D] border-b border-[#ECE9E4] pb-2 mb-4">
+              Edit profile
             </h3>
             
-            <form onSubmit={handleUpdateProfileSubmit} className="space-y-4 text-xs font-semibold">
+            <form onSubmit={handleUpdateProfileSubmit} className="space-y-4 text-xs font-semibold font-body">
               <div>
-                <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Full Name Display</label>
-                <input type="text" required value={editForm.name} onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-100 focus:outline-none focus:border-rose-500/40" />
+                <label className="text-[10px] uppercase font-bold text-[#6E6D72] block mb-1">Full name</label>
+                <input type="text" required value={editForm.name} onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))} className="w-full bg-[#FAF8F5] border border-[#ECE9E4] rounded-xl px-4 py-2 text-sm text-[#1B1B1D] focus:outline-none focus:border-[#EF3E56]" />
               </div>
               <div>
-                <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Core Professional / Interest Vector</label>
-                <input type="text" required value={editForm.profession} onChange={(e) => setEditForm(prev => ({ ...prev, profession: e.target.value }))} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-100 focus:outline-none focus:border-rose-500/40" />
+                <label className="text-[10px] uppercase font-bold text-[#6E6D72] block mb-1">Profession / interest</label>
+                <input type="text" required value={editForm.profession} onChange={(e) => setEditForm(prev => ({ ...prev, profession: e.target.value }))} className="w-full bg-[#FAF8F5] border border-[#ECE9E4] rounded-xl px-4 py-2 text-sm text-[#1B1B1D] focus:outline-none focus:border-[#EF3E56]" />
               </div>
               
               {/* Profile Photo Upload Option */}
               <div>
-                <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Profile Photo Upload</label>
+                <label className="text-[10px] uppercase font-bold text-[#6E6D72] block mb-1">Profile photo</label>
                 <input 
                   type="file" 
                   accept=".jpg,.jpeg,.png" 
                   onChange={(e) => handlePhotoUpload(e, setEditForm, setEditImageError)} 
-                  className="w-full text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-slate-800 file:text-slate-200 hover:file:bg-slate-700 cursor-pointer bg-slate-950 border border-slate-800 rounded-xl p-1" 
+                  className="w-full text-xs text-[#6E6D72] file:mr-3 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-[#EF3E56] file:text-white hover:file:bg-[#D42E44] cursor-pointer bg-[#FAF8F5] border border-[#ECE9E4] rounded-xl p-1" 
                 />
-                <p className="text-[10px] text-slate-500 mt-1">Formats: .jpg, .jpeg, .png (Max limit: 200 KB)</p>
+                <p className="text-[10px] text-[#9B9A9D] mt-1">Formats: .jpg, .jpeg, .png (max 200 KB)</p>
                 {editImageError && (
-                  <p className="text-xs text-rose-400 font-semibold mt-1">{editImageError}</p>
+                  <p className="text-xs text-[#C4283F] font-semibold mt-1">{editImageError}</p>
                 )}
                 {editForm.photoUrl && (
                   <div className="mt-2 flex items-center gap-3">
-                    <img src={getDirectDriveUrl(editForm.photoUrl)} alt="Preview" className="w-12 h-12 rounded-full object-cover border border-rose-500" />
-                    <span className="text-[10px] text-emerald-400 font-mono font-bold">Image Preview Ready</span>
+                    <img src={getDirectDriveUrl(editForm.photoUrl)} alt="Preview" className="w-12 h-12 rounded-full object-cover border-2 border-[#EF3E56]" />
+                    <span className="text-[10px] text-[#1E9E6B] font-body font-bold">Looking good!</span>
                   </div>
                 )}
               </div>
 
               {/* Audio Notification Toggle Switch */}
-              <div className="flex items-center justify-between p-3 bg-slate-950 border border-slate-800 rounded-xl">
+              <div className="flex items-center justify-between p-3 bg-[#FAF8F5] border border-[#ECE9E4] rounded-xl">
                 <div>
-                  <label className="text-xs font-bold text-slate-200 block">Audio Notifications</label>
-                  <span className="text-[10px] text-slate-400 font-normal block">Enable sound triggers for incoming messages</span>
+                  <label className="text-xs font-bold text-[#1B1B1D] block font-body">Audio notifications</label>
+                  <span className="text-[10px] text-[#6E6D72] font-normal block">Play a sound for incoming messages</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setEditForm(prev => ({ ...prev, audioNotificationsEnabled: !prev.audioNotificationsEnabled }))}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-                    editForm.audioNotificationsEnabled ? 'bg-emerald-500' : 'bg-slate-700'
+                    editForm.audioNotificationsEnabled ? 'bg-[#EF3E56]' : 'bg-[#DAD7D2]'
                   }`}
                 >
                   <span
@@ -815,16 +825,16 @@ export default function Home() {
               </div>
 
               <div>
-                <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Biographical & Goals Context Data</label>
-                <textarea required rows={3} value={editForm.rawBio} onChange={(e) => setEditForm(prev => ({ ...prev, rawBio: e.target.value }))} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-100 resize-none focus:outline-none focus:border-rose-500/40" />
+                <label className="text-[10px] uppercase font-bold text-[#6E6D72] block mb-1">Bio & goals</label>
+                <textarea required rows={3} value={editForm.rawBio} onChange={(e) => setEditForm(prev => ({ ...prev, rawBio: e.target.value }))} className="w-full bg-[#FAF8F5] border border-[#ECE9E4] rounded-xl px-4 py-2 text-sm text-[#1B1B1D] resize-none focus:outline-none focus:border-[#EF3E56]" />
               </div>
               
               <div className="flex justify-end gap-2.5 pt-2">
-                <button type="button" onClick={() => setIsEditModalOpen(false)} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold transition">
+                <button type="button" onClick={() => setIsEditModalOpen(false)} className="px-4 py-2 bg-[#F1EFEB] hover:bg-[#E9E6E1] text-[#1B1B1D] rounded-full font-bold transition font-display border border-[#ECE9E4]">
                   Cancel
                 </button>
-                <button type="submit" disabled={loading} className="px-5 py-2 bg-gradient-to-r from-rose-500 to-amber-500 text-white font-bold rounded-xl transition shadow">
-                  {loading ? 'Committing Modifications...' : 'Commit Specs Mutation'}
+                <button type="submit" disabled={loading} className="px-5 py-2 bg-[#EF3E56] hover:bg-[#D42E44] text-white font-bold rounded-full transition shadow-[0_8px_20px_rgba(239,62,86,0.3)] font-display">
+                  {loading ? 'Saving…' : 'Save changes'}
                 </button>
               </div>
             </form>
@@ -834,15 +844,15 @@ export default function Home() {
 
       {/* DYNAMIC DATABASE MESSAGING OVERLAY DRAWER */}
       {activeChatMatch && (
-        <div className="fixed bottom-6 right-6 w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-4 duration-200">
+        <div className="fixed bottom-6 right-6 w-full max-w-sm bg-white border border-[#ECE9E4] rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.15)] overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-4 duration-200">
           
           {/* Header with Audio Toggle Control */}
-          <div className="bg-gradient-to-r from-slate-950 to-slate-900 px-4 py-3 border-b border-slate-800 flex items-center justify-between">
+          <div className="bg-[#FFF1E9] px-4 py-3 border-b border-[#ECE9E4] flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse" />
+              <div className="w-2.5 h-2.5 bg-[#1E9E6B] rounded-full" />
               <div>
-                <h4 className="text-xs font-black text-slate-200 tracking-wide truncate max-w-[140px]">{activeChatMatch.name}</h4>
-                <span className="text-[9px] font-mono text-emerald-400 block font-bold">Signal Match Weight: {activeChatMatch.score}%</span>
+                <h4 className="text-xs font-display font-bold text-[#1B1B1D] tracking-wide truncate max-w-[140px]">{activeChatMatch.name}</h4>
+                <span className="text-[9px] font-body text-[#B23349] block font-bold">Match: {activeChatMatch.score}%</span>
               </div>
             </div>
 
@@ -852,10 +862,10 @@ export default function Home() {
                 type="button"
                 title={userProfile?.audioNotificationsEnabled ? "Mute Audio Notifications" : "Enable Audio Notifications"}
                 onClick={handleToggleAudioNotifications}
-                className={`p-1.5 rounded-lg border text-xs flex items-center justify-center transition-colors ${
+                className={`p-1.5 rounded-full border text-xs flex items-center justify-center transition-colors ${
                   userProfile?.audioNotificationsEnabled 
-                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20' 
-                    : 'bg-slate-800 border-slate-700 text-slate-500 hover:bg-slate-700'
+                    ? 'bg-white border-[#FFD9C2] text-[#EF3E56] hover:bg-[#FFE4D3]' 
+                    : 'bg-white border-[#ECE9E4] text-[#9B9A9D] hover:bg-[#F1EFEB]'
                 }`}
               >
                 {userProfile?.audioNotificationsEnabled ? '🔔' : '🔕'}
@@ -863,7 +873,7 @@ export default function Home() {
 
               <button 
                 onClick={() => setActiveChatMatch(null)} 
-                className="text-slate-500 hover:text-slate-300 text-sm font-bold bg-slate-950 w-6 h-6 rounded-lg flex items-center justify-center border border-slate-800 transition"
+                className="text-[#6E6D72] hover:text-[#1B1B1D] text-sm font-bold bg-white w-6 h-6 rounded-full flex items-center justify-center border border-[#ECE9E4] transition"
               >
                 ✕
               </button>
@@ -871,23 +881,23 @@ export default function Home() {
           </div>
 
           {/* Message Body Logs */}
-          <div className="p-4 h-64 overflow-y-auto bg-slate-950/50 space-y-2.5 flex flex-col">
+          <div className="p-4 h-64 overflow-y-auto bg-[#FAF8F5] space-y-2.5 flex flex-col">
             <div className="text-center p-1 mb-1">
-              <span className="text-[9px] text-slate-600 font-mono tracking-tight bg-slate-950 border border-slate-900 px-3 py-0.5 rounded-full">🔒 Database sync channel connection secure</span>
+              <span className="text-[9px] text-[#9B9A9D] font-body tracking-tight bg-white border border-[#ECE9E4] px-3 py-0.5 rounded-full">🔒 Secure sync channel connected</span>
             </div>
             
             {chatLogs.map((msg, index) => {
               const isMe = msg.senderId === userProfile.userId;
               return (
-                <div key={index} className={`max-w-[80%] p-2.5 rounded-2xl text-xs leading-relaxed border ${isMe ? 'bg-rose-600/20 border-rose-500/30 text-rose-200 rounded-br-none self-end' : 'bg-slate-800/60 border-slate-700/50 text-slate-300 rounded-tl-none self-start'}`}>{msg.messageText}</div>
+                <div key={index} className={`max-w-[80%] p-2.5 rounded-2xl text-xs leading-relaxed border font-body ${isMe ? 'bg-[#EF3E56] border-[#EF3E56] text-white rounded-br-none self-end' : 'bg-white border-[#ECE9E4] text-[#1B1B1D] rounded-tl-none self-start'}`}>{msg.messageText}</div>
               );
             })}
           </div>
 
           {/* Message Input Payload Form */}
-          <form onSubmit={handleSendMessage} className="p-3 bg-slate-950 border-t border-slate-800 flex gap-2">
-            <input type="text" placeholder="Type a secure transmission payload..." value={chatMessage} onChange={(e) => setChatMessage(e.target.value)} className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-rose-500/50 font-medium" />
-            <button type="submit" disabled={!chatMessage.trim()} className="px-4 bg-gradient-to-r from-rose-500 via-amber-500 to-emerald-500 disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-600 text-white text-xs font-bold rounded-xl shadow transition duration-150">Send</button>
+          <form onSubmit={handleSendMessage} className="p-3 bg-white border-t border-[#ECE9E4] flex gap-2">
+            <input type="text" placeholder="Type a message..." value={chatMessage} onChange={(e) => setChatMessage(e.target.value)} className="flex-1 bg-[#FAF8F5] border border-[#ECE9E4] rounded-full px-3 py-2 text-xs text-[#1B1B1D] focus:outline-none focus:border-[#EF3E56] font-body" />
+            <button type="submit" disabled={!chatMessage.trim()} className="px-4 bg-[#EF3E56] hover:bg-[#D42E44] disabled:bg-[#DAD7D2] disabled:text-white text-white text-xs font-display font-bold rounded-full shadow-[0_6px_16px_rgba(239,62,86,0.3)] transition duration-150">Send</button>
           </form>
 
         </div>
