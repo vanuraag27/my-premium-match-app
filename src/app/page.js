@@ -18,6 +18,10 @@ export default function Home() {
   // Filtering Options State Triggers
   const [searchProfession, setSearchProfession] = useState('');
   const [searchKeyword, setSearchKeyword] = useState('');
+  // Match percentage range filter — disabled by default to preserve existing behaviour
+  const [matchFilterEnabled, setMatchFilterEnabled] = useState(false);
+  const [minMatchPercent, setMinMatchPercent] = useState(75);
+  const [maxMatchPercent, setMaxMatchPercent] = useState(100);
 
   // Buffered Registration Form Matrix
   const [registerForm, setRegisterForm] = useState({
@@ -45,11 +49,21 @@ export default function Home() {
   const [chatMessage, setChatMessage] = useState('');
   const [chatLogs, setChatLogs] = useState([]);
 
+  // Message Request Approval System States
+  const [messageRequests, setMessageRequests] = useState([]);
+  const [connectionStatuses, setConnectionStatuses] = useState({});
+  const [showRequestsPanel, setShowRequestsPanel] = useState(false);
+  const [showSendRequestModal, setShowSendRequestModal] = useState(false);
+  const [requestTargetMatch, setRequestTargetMatch] = useState(null);
+  const [requestMessageText, setRequestMessageText] = useState('');
+  const [requestLoading, setRequestLoading] = useState(false);
+
   // --- New Message Audio Notification refs ---
   const notificationAudioRef = useRef(null);
   const audioUnlockedRef = useRef(false);
   const seenMessageIdsRef = useRef(null);
   const activeChatKeyRef = useRef(null);
+  const seenNotificationIdsRef = useRef(new Set());
 
   // Reusable helper for handling local image uploads
   const handlePhotoUpload = (e, setForm, setErrorState) => {
@@ -157,6 +171,200 @@ export default function Home() {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(''), 4000);
   };
+
+  // Build filter payload including optional match percentage range
+  const buildFilterPayload = (profile) => {
+    const payload = {
+      ...profile,
+      searchProfession,
+      searchKeyword,
+    };
+    if (matchFilterEnabled) {
+      payload.minMatchPercent = minMatchPercent;
+      payload.maxMatchPercent = maxMatchPercent;
+    }
+    return payload;
+  };
+
+  // Load message requests and derive per-match connection statuses
+  const loadMessageRequests = async (userId) => {
+    if (!userId) return;
+    try {
+      const res = await fetch(`/api/message-requests?userId=${encodeURIComponent(userId)}`);
+      const data = await res.json();
+      if (data.success) {
+        setMessageRequests(data.requests || []);
+        setConnectionStatuses((prev) => {
+          const statusMap = { ...prev };
+          (data.requests || []).forEach((req) => {
+            const otherId = req.senderId === userId ? req.receiverId : req.senderId;
+            if (req.requestStatus === 'Accepted') {
+              statusMap[otherId] = 'accepted';
+            } else if (req.requestStatus === 'Pending') {
+              statusMap[otherId] = req.senderId === userId ? 'pending_sent' : 'pending_received';
+            } else if (req.requestStatus === 'Rejected' && req.senderId === userId) {
+              statusMap[otherId] = 'rejected';
+            }
+          });
+          return statusMap;
+        });
+      }
+    } catch (err) {
+      console.error('Failed to load message requests:', err);
+    }
+  };
+
+  // Poll notifications and surface via existing toast + audio system
+  const pollNotifications = async (userId) => {
+    if (!userId) return;
+    try {
+      const res = await fetch(`/api/notifications?userId=${encodeURIComponent(userId)}`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.notifications)) {
+        const newNotifications = data.notifications.filter(
+          (n) => !seenNotificationIdsRef.current.has(String(n._id))
+        );
+        if (newNotifications.length > 0) {
+          newNotifications.forEach((n) => {
+            seenNotificationIdsRef.current.add(String(n._id));
+            showToast(n.body || n.title);
+          });
+          playNotificationSound();
+          await fetch('/api/notifications', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId,
+              notificationIds: newNotifications.map((n) => n._id),
+            }),
+          });
+          await loadMessageRequests(userId);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to poll notifications:', err);
+    }
+  };
+
+  // Poll message requests and notifications while logged in
+  useEffect(() => {
+    if (!userProfile?.userId) return;
+    loadMessageRequests(userProfile.userId);
+    pollNotifications(userProfile.userId);
+    const timer = setInterval(() => {
+      loadMessageRequests(userProfile.userId);
+      pollNotifications(userProfile.userId);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [userProfile?.userId]);
+
+  // Handle message button click based on connection status
+  const handleMessageClick = (item) => {
+    const status = connectionStatuses[item.userId] || 'none';
+    if (status === 'accepted') {
+      setActiveChatMatch(item);
+    } else if (status === 'pending_sent') {
+      showToast('Your message request is pending approval.');
+    } else if (status === 'pending_received') {
+      setShowRequestsPanel(true);
+    } else if (status === 'rejected') {
+      showToast('Your message request was declined. Messaging is not available.');
+    } else {
+      setRequestTargetMatch(item);
+      setRequestMessageText('');
+      setShowSendRequestModal(true);
+    }
+  };
+
+  // Send first message as a message request
+  const handleSendMessageRequest = async (e) => {
+    e.preventDefault();
+    if (!requestMessageText.trim() || !userProfile?.userId || !requestTargetMatch?.userId) return;
+    setRequestLoading(true);
+    try {
+      const response = await fetch('/api/message-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          senderId: userProfile.userId,
+          receiverId: requestTargetMatch.userId,
+          firstMessage: requestMessageText.trim(),
+          matchPercentage: requestTargetMatch.score,
+        }),
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error || 'Failed to send message request.');
+      showToast('Message request sent! Waiting for approval.');
+      setShowSendRequestModal(false);
+      setRequestMessageText('');
+      await loadMessageRequests(userProfile.userId);
+    } catch (err) {
+      showToast(err.message || 'Error sending message request.');
+    } finally {
+      setRequestLoading(false);
+    }
+  };
+
+  // Accept an incoming message request
+  const handleAcceptRequest = async (request) => {
+    setRequestLoading(true);
+    try {
+      const response = await fetch('/api/message-requests', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requestId: request._id,
+          userId: userProfile.userId,
+          action: 'accept',
+        }),
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error || 'Failed to accept request.');
+      showToast('Message request accepted! Chat is now open.');
+      await loadMessageRequests(userProfile.userId);
+      const matchItem = matches.find((m) => m.userId === request.senderId) || {
+        userId: request.senderId,
+        name: request.senderName,
+        photoUrl: request.senderPhotoUrl,
+        score: request.matchPercentage || 0,
+        profession: request.senderProfession,
+      };
+      setActiveChatMatch(matchItem);
+      setShowRequestsPanel(false);
+    } catch (err) {
+      showToast(err.message || 'Error accepting request.');
+    } finally {
+      setRequestLoading(false);
+    }
+  };
+
+  // Reject an incoming message request
+  const handleRejectRequest = async (request) => {
+    setRequestLoading(true);
+    try {
+      const response = await fetch('/api/message-requests', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requestId: request._id,
+          userId: userProfile.userId,
+          action: 'reject',
+        }),
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error || 'Failed to reject request.');
+      showToast('Message request declined.');
+      await loadMessageRequests(userProfile.userId);
+    } catch (err) {
+      showToast(err.message || 'Error rejecting request.');
+    } finally {
+      setRequestLoading(false);
+    }
+  };
+
+  const incomingPendingRequests = messageRequests.filter(
+    (r) => r.receiverId === userProfile?.userId && r.requestStatus === 'Pending'
+  );
 
   // Toggle Audio Notifications directly and sync to DB
   const handleToggleAudioNotifications = async () => {
@@ -281,6 +489,11 @@ export default function Home() {
       if (checkResult.exists) {
         setUserProfile(checkResult.profile);
         setMatches(checkResult.matches);
+        const statusMap = {};
+        (checkResult.matches || []).forEach((m) => {
+          if (m.connectionStatus) statusMap[m.userId] = m.connectionStatus;
+        });
+        setConnectionStatuses(statusMap);
         setEditForm({
           name: checkResult.profile.name || '',
           profession: checkResult.profile.profession || '',
@@ -319,6 +532,11 @@ export default function Home() {
 
       setUserProfile(result.profile);
       setMatches(result.matches);
+      const statusMap = {};
+      (result.matches || []).forEach((m) => {
+        if (m.connectionStatus) statusMap[m.userId] = m.connectionStatus;
+      });
+      setConnectionStatuses(statusMap);
       setEditForm({
         name: result.profile.name || '',
         profession: result.profile.profession || '',
@@ -348,7 +566,8 @@ export default function Home() {
           userId: userProfile.userId,
           ...editForm,
           searchProfession,
-          searchKeyword
+          searchKeyword,
+          ...(matchFilterEnabled ? { minMatchPercent, maxMatchPercent } : {}),
         }),
       });
       const result = await response.json();
@@ -356,6 +575,11 @@ export default function Home() {
 
       setUserProfile(result.profile);
       setMatches(result.matches);
+      const statusMap = {};
+      (result.matches || []).forEach((m) => {
+        if (m.connectionStatus) statusMap[m.userId] = m.connectionStatus;
+      });
+      setConnectionStatuses(statusMap);
       setIsEditModalOpen(false);
       showToast("Profile schema changes safely written down to cluster indexing shards.");
     } catch (err) {
@@ -375,15 +599,17 @@ export default function Home() {
       const response = await fetch('/api/onboarding', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...userProfile,
-          searchProfession,
-          searchKeyword
-        }),
+        body: JSON.stringify(buildFilterPayload(userProfile)),
       });
       const result = await response.json();
       if (!result.success) throw new Error(result.error || 'Filtering array failure.');
       setMatches(result.matches);
+      // Sync connection statuses from enriched match data
+      const statusMap = {};
+      (result.matches || []).forEach((m) => {
+        if (m.connectionStatus) statusMap[m.userId] = m.connectionStatus;
+      });
+      setConnectionStatuses((prev) => ({ ...prev, ...statusMap }));
       showToast("Vector matching array search calculation index refreshed.");
     } catch (err) {
       setError(err.message || 'Timeout tracing query segments.');
@@ -412,6 +638,8 @@ export default function Home() {
       const result = await response.json();
       if (result.success) {
         setChatLogs((prev) => [...prev, result.message]);
+      } else if (result.requiresApproval) {
+        showToast('Messaging requires an accepted message request.');
       }
     } catch (err) {
       console.error("Signal payload routing error:", err);
@@ -428,6 +656,13 @@ export default function Home() {
     setEditImageError('');
     setSearchProfession('');
     setSearchKeyword('');
+    setMatchFilterEnabled(false);
+    setMinMatchPercent(75);
+    setMaxMatchPercent(100);
+    setMessageRequests([]);
+    setConnectionStatuses({});
+    setShowRequestsPanel(false);
+    setShowSendRequestModal(false);
     setActiveChatMatch(null);
     setStep('EMAIL');
     setError('');
@@ -675,26 +910,98 @@ export default function Home() {
           <div className="md:col-span-2 space-y-4">
             
             {/* Real-time Cluster Query Interface Box */}
-            <div className="bg-white border border-[#ECE9E4] rounded-3xl p-4 shadow-[0_8px_30px_rgba(0,0,0,0.04)] flex flex-col sm:flex-row gap-3 items-end">
-              <div className="w-full sm:w-1/2 space-y-1">
-                <label className="text-[10px] uppercase font-bold text-[#6E6D72] block tracking-wide font-body">Filter by profession</label>
-                <input type="text" placeholder="e.g. Engineer, Student, Creator" value={searchProfession} onChange={(e) => setSearchProfession(e.target.value)} className="w-full bg-[#FAF8F5] border border-[#ECE9E4] rounded-xl px-3 py-2 text-xs text-[#1B1B1D] focus:outline-none focus:border-[#EF3E56] font-body" />
+            <div className="bg-white border border-[#ECE9E4] rounded-3xl p-4 shadow-[0_8px_30px_rgba(0,0,0,0.04)] space-y-3">
+              <div className="flex flex-col sm:flex-row gap-3 items-end">
+                <div className="w-full sm:w-1/2 space-y-1">
+                  <label className="text-[10px] uppercase font-bold text-[#6E6D72] block tracking-wide font-body">Filter by profession</label>
+                  <input type="text" placeholder="e.g. Engineer, Student, Creator" value={searchProfession} onChange={(e) => setSearchProfession(e.target.value)} className="w-full bg-[#FAF8F5] border border-[#ECE9E4] rounded-xl px-3 py-2 text-xs text-[#1B1B1D] focus:outline-none focus:border-[#EF3E56] font-body" />
+                </div>
+                <div className="w-full sm:w-1/2 space-y-1">
+                  <label className="text-[10px] uppercase font-bold text-[#6E6D72] block tracking-wide font-body">Keyword search</label>
+                  <input type="text" placeholder="Search names, interests or bio details..." value={searchKeyword} onChange={(e) => setSearchKeyword(e.target.value)} className="w-full bg-[#FAF8F5] border border-[#ECE9E4] rounded-xl px-3 py-2 text-xs text-[#1B1B1D] focus:outline-none focus:border-[#EF3E56] font-body" />
+                </div>
+                <button onClick={handleApplyFilters} disabled={loading} className="w-full sm:w-auto px-5 py-2 bg-[#EF3E56] hover:bg-[#D42E44] text-white font-display font-bold text-xs rounded-full shadow-[0_8px_20px_rgba(239,62,86,0.3)] transition whitespace-nowrap disabled:opacity-50">
+                  {loading ? 'Filtering…' : 'Apply filters'}
+                </button>
               </div>
-              <div className="w-full sm:w-1/2 space-y-1">
-                <label className="text-[10px] uppercase font-bold text-[#6E6D72] block tracking-wide font-body">Keyword search</label>
-                <input type="text" placeholder="Search names, interests or bio details..." value={searchKeyword} onChange={(e) => setSearchKeyword(e.target.value)} className="w-full bg-[#FAF8F5] border border-[#ECE9E4] rounded-xl px-3 py-2 text-xs text-[#1B1B1D] focus:outline-none focus:border-[#EF3E56] font-body" />
+
+              {/* Match Percentage Range Filter — dual range slider */}
+              <div className="border-t border-[#ECE9E4] pt-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] uppercase font-bold text-[#6E6D72] tracking-wide font-body flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={matchFilterEnabled}
+                      onChange={(e) => setMatchFilterEnabled(e.target.checked)}
+                      className="accent-[#EF3E56] w-3.5 h-3.5"
+                    />
+                    Filter by match percentage
+                  </label>
+                  {matchFilterEnabled && (
+                    <span className="text-xs font-bold font-display text-[#EF3E56]">
+                      {minMatchPercent}% – {maxMatchPercent}%
+                    </span>
+                  )}
+                </div>
+                {matchFilterEnabled && (
+                  <div className="px-1 space-y-1">
+                    <div className="flex items-center gap-3">
+                      <span className="text-[10px] text-[#9B9A9D] font-bold font-body w-8">{minMatchPercent}%</span>
+                      <input
+                        type="range"
+                        min={75}
+                        max={100}
+                        value={minMatchPercent}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setMinMatchPercent(val);
+                          if (val > maxMatchPercent) setMaxMatchPercent(val);
+                        }}
+                        className="flex-1 accent-[#EF3E56] h-1.5"
+                      />
+                      <span className="text-[10px] text-[#9B9A9D] font-bold font-body">Min</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-[10px] text-[#9B9A9D] font-bold font-body w-8">{maxMatchPercent}%</span>
+                      <input
+                        type="range"
+                        min={75}
+                        max={100}
+                        value={maxMatchPercent}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setMaxMatchPercent(val);
+                          if (val < minMatchPercent) setMinMatchPercent(val);
+                        }}
+                        className="flex-1 accent-[#EF3E56] h-1.5"
+                      />
+                      <span className="text-[10px] text-[#9B9A9D] font-bold font-body">Max</span>
+                    </div>
+                  </div>
+                )}
               </div>
-              <button onClick={handleApplyFilters} disabled={loading} className="w-full sm:w-auto px-5 py-2 bg-[#EF3E56] hover:bg-[#D42E44] text-white font-display font-bold text-xs rounded-full shadow-[0_8px_20px_rgba(239,62,86,0.3)] transition whitespace-nowrap disabled:opacity-50">
-                {loading ? 'Filtering…' : 'Apply filters'}
-              </button>
             </div>
 
-            <h3 className="font-display text-2xl font-bold text-[#1B1B1D] flex items-center justify-between px-1">
-              <span>Your matches</span>
-              <span className="text-xs bg-[#FFF1E9] text-[#B23349] border border-[#FFD9C2] px-3 py-1 rounded-full font-bold font-body">
-                {matches?.length || 0} found
-              </span>
-            </h3>
+            <div className="flex items-center justify-between px-1">
+              <h3 className="font-display text-2xl font-bold text-[#1B1B1D] flex items-center gap-3">
+                <span>Your matches</span>
+                <span className="text-xs bg-[#FFF1E9] text-[#B23349] border border-[#FFD9C2] px-3 py-1 rounded-full font-bold font-body">
+                  {matches?.length || 0} found
+                </span>
+              </h3>
+              {/* Message Requests Inbox Button */}
+              <button
+                onClick={() => setShowRequestsPanel(true)}
+                className="relative px-4 py-1.5 bg-[#FFF1E9] hover:bg-[#FFE4D3] text-[#B23349] border border-[#FFD9C2] font-display font-bold text-xs rounded-full transition"
+              >
+                Message Requests
+                {incomingPendingRequests.length > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[#EF3E56] text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                    {incomingPendingRequests.length}
+                  </span>
+                )}
+              </button>
+            </div>
 
             {(!matches || matches.length === 0) ? (
               <div className="bg-white border border-dashed border-[#ECE9E4] text-center p-12 rounded-3xl">
@@ -749,12 +1056,32 @@ export default function Home() {
 
                   {/* Persistent Messaging Action Trigger */}
                   <div className="mt-4 pt-3 border-t border-[#ECE9E4] flex justify-end">
-                    <button
-                      onClick={() => setActiveChatMatch(item)}
-                      className="px-4 py-1.5 bg-[#EF3E56] hover:bg-[#D42E44] text-white font-display font-bold text-xs rounded-full shadow-[0_6px_16px_rgba(239,62,86,0.3)] transition duration-150"
-                    >
-                      Message
-                    </button>
+                    {(() => {
+                      const status = connectionStatuses[item.userId] || 'none';
+                      const btnLabel = status === 'accepted' ? 'Message'
+                        : status === 'pending_sent' ? 'Request Pending'
+                        : status === 'pending_received' ? 'Respond to Request'
+                        : status === 'rejected' ? 'Declined'
+                        : 'Send Request';
+                      const btnClass = status === 'accepted'
+                        ? 'bg-[#EF3E56] hover:bg-[#D42E44] text-white'
+                        : status === 'pending_sent'
+                        ? 'bg-[#FFF1E9] text-[#B23349] border border-[#FFD9C2] cursor-default'
+                        : status === 'pending_received'
+                        ? 'bg-[#1E9E6B] hover:bg-[#178A5E] text-white'
+                        : status === 'rejected'
+                        ? 'bg-[#F1EFEB] text-[#9B9A9D] border border-[#ECE9E4] cursor-default'
+                        : 'bg-[#EF3E56] hover:bg-[#D42E44] text-white';
+                      return (
+                        <button
+                          onClick={() => handleMessageClick(item)}
+                          disabled={status === 'pending_sent' || status === 'rejected'}
+                          className={`px-4 py-1.5 font-display font-bold text-xs rounded-full shadow-[0_6px_16px_rgba(239,62,86,0.3)] transition duration-150 ${btnClass}`}
+                        >
+                          {btnLabel}
+                        </button>
+                      );
+                    })()}
                   </div>
                 </div>
               ))
@@ -900,6 +1227,118 @@ export default function Home() {
             <button type="submit" disabled={!chatMessage.trim()} className="px-4 bg-[#EF3E56] hover:bg-[#D42E44] disabled:bg-[#DAD7D2] disabled:text-white text-white text-xs font-display font-bold rounded-full shadow-[0_6px_16px_rgba(239,62,86,0.3)] transition duration-150">Send</button>
           </form>
 
+        </div>
+      )}
+
+      {/* MESSAGE REQUESTS INBOX PANEL */}
+      {showRequestsPanel && (
+        <div className="fixed inset-0 bg-[#1B1B1D]/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="w-full max-w-lg bg-white border border-[#ECE9E4] rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.15)] relative animate-in zoom-in-95 duration-150 max-h-[80vh] flex flex-col">
+            <div className="px-6 py-4 border-b border-[#ECE9E4] flex items-center justify-between">
+              <h3 className="font-display text-xl font-bold text-[#1B1B1D]">Message Requests</h3>
+              <button
+                onClick={() => setShowRequestsPanel(false)}
+                className="text-[#6E6D72] hover:text-[#1B1B1D] text-sm font-bold bg-[#F1EFEB] w-7 h-7 rounded-full flex items-center justify-center border border-[#ECE9E4]"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 p-4 space-y-3">
+              {incomingPendingRequests.length === 0 ? (
+                <p className="text-center text-sm text-[#6E6D72] font-body py-8">No pending message requests.</p>
+              ) : (
+                incomingPendingRequests.map((req) => (
+                  <div key={req._id} className="bg-[#FAF8F5] border border-[#ECE9E4] rounded-2xl p-4 space-y-3">
+                    <div className="flex items-center gap-3">
+                      {req.senderPhotoUrl ? (
+                        <img src={getDirectDriveUrl(req.senderPhotoUrl)} alt={req.senderName} className="w-10 h-10 rounded-full object-cover border-2 border-[#FFF1E9]" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-[#F1EFEB] border border-[#ECE9E4] flex items-center justify-center text-[#9B9A9D] font-bold text-xs font-body">?</div>
+                      )}
+                      <div className="flex-1">
+                        <h4 className="font-display text-sm font-bold text-[#1B1B1D]">{req.senderName}</h4>
+                        <p className="text-[10px] text-[#EF3E56] font-bold font-body">{req.matchPercentage != null ? `${req.matchPercentage}% Match` : 'Match'}</p>
+                      </div>
+                      <span className="text-[9px] text-[#9B9A9D] font-body">
+                        {req.requestCreatedAt ? new Date(req.requestCreatedAt).toLocaleString() : ''}
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#4A4A4D] bg-white p-3 rounded-xl border border-[#ECE9E4] font-body italic">
+                      &ldquo;{req.firstMessage}&rdquo;
+                    </p>
+                    <div className="flex gap-2 justify-end">
+                      <button
+                        onClick={() => handleRejectRequest(req)}
+                        disabled={requestLoading}
+                        className="px-4 py-1.5 bg-white hover:bg-[#FDECEC] text-[#C4283F] border border-[#F6C4C9] font-display font-bold text-xs rounded-full transition disabled:opacity-50"
+                      >
+                        Reject
+                      </button>
+                      <button
+                        onClick={() => handleAcceptRequest(req)}
+                        disabled={requestLoading}
+                        className="px-4 py-1.5 bg-[#1E9E6B] hover:bg-[#178A5E] text-white font-display font-bold text-xs rounded-full transition disabled:opacity-50"
+                      >
+                        Accept
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SEND MESSAGE REQUEST MODAL */}
+      {showSendRequestModal && requestTargetMatch && (
+        <div className="fixed inset-0 bg-[#1B1B1D]/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="w-full max-w-md bg-white border border-[#ECE9E4] rounded-3xl p-6 shadow-[0_20px_60px_rgba(0,0,0,0.15)] relative animate-in zoom-in-95 duration-150">
+            <h3 className="font-display text-xl font-bold text-[#1B1B1D] border-b border-[#ECE9E4] pb-2 mb-4">
+              Send Message Request
+            </h3>
+            <div className="flex items-center gap-3 mb-4">
+              {requestTargetMatch.photoUrl ? (
+                <img src={getDirectDriveUrl(requestTargetMatch.photoUrl)} alt={requestTargetMatch.name} className="w-10 h-10 rounded-full object-cover border-2 border-[#FFF1E9]" />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-[#F1EFEB] border border-[#ECE9E4] flex items-center justify-center text-[#9B9A9D] font-bold text-xs font-body">?</div>
+              )}
+              <div>
+                <p className="font-display text-sm font-bold text-[#1B1B1D]">{requestTargetMatch.name}</p>
+                <p className="text-[10px] text-[#EF3E56] font-bold font-body">{requestTargetMatch.score}% Match</p>
+              </div>
+            </div>
+            <p className="text-xs text-[#6E6D72] font-body mb-3">
+              Your first message will be sent as a request. They must accept before you can chat.
+            </p>
+            <form onSubmit={handleSendMessageRequest} className="space-y-4">
+              <textarea
+                required
+                rows={3}
+                placeholder="Write your first message..."
+                value={requestMessageText}
+                onChange={(e) => setRequestMessageText(e.target.value)}
+                maxLength={1000}
+                className="w-full bg-[#FAF8F5] border border-[#ECE9E4] rounded-xl px-4 py-2 text-sm text-[#1B1B1D] resize-none focus:outline-none focus:border-[#EF3E56] font-body"
+              />
+              <div className="flex justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => { setShowSendRequestModal(false); setRequestMessageText(''); }}
+                  className="px-4 py-2 bg-[#F1EFEB] hover:bg-[#E9E6E1] text-[#1B1B1D] rounded-full font-bold transition font-display border border-[#ECE9E4] text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={requestLoading || !requestMessageText.trim()}
+                  className="px-5 py-2 bg-[#EF3E56] hover:bg-[#D42E44] text-white font-bold rounded-full transition shadow-[0_8px_20px_rgba(239,62,86,0.3)] font-display text-xs disabled:opacity-50"
+                >
+                  {requestLoading ? 'Sending…' : 'Send Request'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

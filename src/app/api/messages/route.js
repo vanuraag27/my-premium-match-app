@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../lib/mongodb';
+import { isConversationApproved } from '../../../services/messageRequestHelpers';
 
-// Fetch chat history
+// Fetch chat history — only allowed for approved conversations
 export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url);
@@ -14,6 +15,16 @@ export async function GET(req) {
 
     const client = await clientPromise;
     const db = client.db('bandhan-engine');
+
+    // Security: prevent unauthorized conversation access
+    const approved = await isConversationApproved(db, senderId, receiverId);
+    if (!approved) {
+      return NextResponse.json({
+        success: true,
+        messages: [],
+        requiresApproval: true,
+      });
+    }
 
     const conversationHistory = await db.collection('messages').find({
       $or: [
@@ -30,7 +41,7 @@ export async function GET(req) {
   }
 }
 
-// Post new message
+// Post new message — only allowed after message request approval
 export async function POST(req) {
   try {
     const body = await req.json();
@@ -40,8 +51,38 @@ export async function POST(req) {
       return NextResponse.json({ success: false, error: 'Invalid parameters.' }, { status: 400 });
     }
 
+    if (String(senderId) === String(receiverId)) {
+      return NextResponse.json({ success: false, error: 'Cannot message yourself.' }, { status: 400 });
+    }
+
     const client = await clientPromise;
     const db = client.db('bandhan-engine');
+
+    // Security: verify conversation is approved before allowing messages
+    const approved = await isConversationApproved(db, senderId, receiverId);
+    if (!approved) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Messaging requires an accepted message request. Send a message request first.',
+          requiresApproval: true,
+        },
+        { status: 403 }
+      );
+    }
+
+    // Spam prevention: rate limit to 30 messages per minute per sender
+    const oneMinuteAgo = new Date(Date.now() - 60 * 1000);
+    const recentCount = await db.collection('messages').countDocuments({
+      senderId: String(senderId),
+      timestamp: { $gte: oneMinuteAgo },
+    });
+    if (recentCount >= 30) {
+      return NextResponse.json(
+        { success: false, error: 'Message rate limit exceeded. Please wait a moment.' },
+        { status: 429 }
+      );
+    }
 
     // Optional: Automatically ensure TTL index exists (e.g. 24 hours = 86400 seconds)
     await db.collection('messages').createIndex(

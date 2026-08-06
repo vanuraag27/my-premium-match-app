@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../lib/mongodb';
+import { getConnectionStatus } from '../../../services/messageRequestHelpers';
 
 // Helper function to calculate a real vector alignment score based on shared keywords
 function calculateVectorScore(user, match) {
@@ -28,6 +29,22 @@ function calculateVectorScore(user, match) {
   
   // Guarantee values stay tightly balanced in premium threshold matrix
   return Math.min(Math.max(base, 75), 99);
+}
+
+/**
+ * Apply match percentage range filter after scores are computed.
+ * Only filters when min or max values are explicitly provided.
+ */
+function applyMatchPercentageFilter(matches, minMatchPercent, maxMatchPercent) {
+  const hasMin = minMatchPercent !== null && minMatchPercent !== undefined && minMatchPercent !== '';
+  const hasMax = maxMatchPercent !== null && maxMatchPercent !== undefined && maxMatchPercent !== '';
+
+  if (!hasMin && !hasMax) return matches;
+
+  const min = hasMin ? Number(minMatchPercent) : 0;
+  const max = hasMax ? Number(maxMatchPercent) : 100;
+
+  return matches.filter((m) => m.score >= min && m.score <= max);
 }
 
 // Helper to safely resolve the MongoDB database instance
@@ -118,11 +135,24 @@ export async function GET(req) {
     
     formattedMatches.sort((a, b) => b.score - a.score);
 
+    // Optional match percentage range filter from query params (GET login flow)
+    const minMatchPercent = searchParams.get('minMatchPercent');
+    const maxMatchPercent = searchParams.get('maxMatchPercent');
+    const filteredMatches = applyMatchPercentageFilter(formattedMatches, minMatchPercent, maxMatchPercent);
+
+    // Enrich matches with connection status for message request workflow
+    const matchesWithStatus = await Promise.all(
+      filteredMatches.map(async (match) => ({
+        ...match,
+        connectionStatus: await getConnectionStatus(db, userId, match.userId),
+      }))
+    );
+
     return NextResponse.json({
       success: true,
       exists: true,
       profile: existingUser,
-      matches: formattedMatches
+      matches: matchesWithStatus
     });
 
   } catch (error) {
@@ -135,7 +165,7 @@ export async function GET(req) {
 export async function POST(req) {
   try {
     const body = await req.json();
-    const { userId, name, rawBio, photoUrl, profession, searchProfession, searchKeyword, audioNotificationsEnabled } = body;
+    const { userId, name, rawBio, photoUrl, profession, searchProfession, searchKeyword, audioNotificationsEnabled, minMatchPercent, maxMatchPercent } = body;
 
     if (!userId) {
       return NextResponse.json({ success: false, error: 'Missing active user node identifier.' }, { status: 400 });
@@ -219,10 +249,21 @@ export async function POST(req) {
 
     formattedMatches.sort((a, b) => b.score - a.score);
 
+    // Apply match percentage range filter when provided via filter UI
+    const filteredMatches = applyMatchPercentageFilter(formattedMatches, minMatchPercent, maxMatchPercent);
+
+    // Enrich matches with connection status for message request workflow
+    const matchesWithStatus = await Promise.all(
+      filteredMatches.map(async (match) => ({
+        ...match,
+        connectionStatus: await getConnectionStatus(db, userId, match.userId),
+      }))
+    );
+
     return NextResponse.json({
       success: true,
       profile: updatedProfile,
-      matches: formattedMatches
+      matches: matchesWithStatus
     });
 
   } catch (error) {
