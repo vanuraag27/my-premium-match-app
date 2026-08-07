@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
 
 export default function Home() {
   // Authentication & Session Core States
@@ -725,6 +726,18 @@ export default function Home() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(schemaOrgData) }}
       />
+
+      {/* VibeKey Brand Logo — Header (top-left corner) */}
+      <div className="w-full flex items-center justify-start mb-2 md:mb-4">
+        <Image
+          src="/vibekey-logo.png"
+          alt="VibeKey Logo"
+          width={1254}
+          height={1254}
+          priority
+          className="h-8 sm:h-9 md:h-12 w-auto object-contain select-none"
+        />
+      </div>
 
       {/* GLOBAL NOTIFICATION SYSTEM BANNER FLOATER */}
       {toastMessage && (
