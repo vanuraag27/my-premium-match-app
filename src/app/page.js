@@ -44,6 +44,8 @@ export default function Home() {
     audioNotificationsEnabled: true
   });
   const [editImageError, setEditImageError] = useState('');
+  // Ref to the scrollable Edit Profile modal card, used for mobile keyboard handling
+  const editModalCardRef = useRef(null);
 
   // Database-Backed Chat Engine System States
   const [activeChatMatch, setActiveChatMatch] = useState(null);
@@ -258,6 +260,54 @@ export default function Home() {
     }, 5000);
     return () => clearInterval(timer);
   }, [userProfile?.userId]);
+
+  // Lock background scrolling while the Edit Profile modal is open,
+  // so only the popup itself scrolls (desktop + mobile, including iOS rubber-banding)
+  useEffect(() => {
+    if (!isEditModalOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    const previousTouchAction = document.body.style.touchAction;
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.body.style.touchAction = previousTouchAction;
+    };
+  }, [isEditModalOpen]);
+
+  // Keep the focused field visible above the mobile on-screen keyboard.
+  // Re-scrolls the focused field into view whenever the visual viewport
+  // shrinks/shifts (keyboard opening/closing) or resizes on rotation.
+  useEffect(() => {
+    if (!isEditModalOpen) return;
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+
+    const scrollActiveFieldIntoView = () => {
+      const active = document.activeElement;
+      if (active && editModalCardRef.current && editModalCardRef.current.contains(active)) {
+        active.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+    };
+
+    viewport.addEventListener('resize', scrollActiveFieldIntoView);
+    viewport.addEventListener('scroll', scrollActiveFieldIntoView);
+    return () => {
+      viewport.removeEventListener('resize', scrollActiveFieldIntoView);
+      viewport.removeEventListener('scroll', scrollActiveFieldIntoView);
+    };
+  }, [isEditModalOpen]);
+
+  // Automatically scroll a focused field (input, textarea, select, etc.) into
+  // full view inside the Edit Profile popup — used for mobile keyboard overlap.
+  const handleEditModalFieldFocus = (e) => {
+    const target = e.target;
+    // Small delay lets the mobile keyboard finish animating in before we scroll,
+    // otherwise the scroll position is calculated against the pre-keyboard layout.
+    setTimeout(() => {
+      target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }, 150);
+  };
 
   // Handle message button click based on connection status
   const handleMessageClick = (item) => {
@@ -719,6 +769,20 @@ export default function Home() {
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap');
         .font-display { font-family: 'Poppins', sans-serif; }
         .font-body { font-family: 'Inter', sans-serif; }
+
+        /* Edit Profile popup: cap height to the visible viewport (accounting for
+           the backdrop's p-4 padding) so the whole card scrolls as one unit
+           instead of overflowing off-screen. Falls back to vh for older
+           browsers, then upgrades to dvh (dynamic viewport height) where
+           supported so the cap shrinks correctly when the mobile keyboard opens. */
+        .editProfileModalCard {
+          max-height: calc(100vh - 2rem);
+        }
+        @supports (max-height: 100dvh) {
+          .editProfileModalCard {
+            max-height: calc(100dvh - 2rem);
+          }
+        }
       `}</style>
 
       {/* GEO & AI ENGINE SEARCH INDEXING METADATA */}
@@ -1106,7 +1170,12 @@ export default function Home() {
       {/* INTERACTIVE PROFILE SPECS EDITING MODAL BACKDROP CONTAINER */}
       {isEditModalOpen && (
         <div className="fixed inset-0 bg-[#1B1B1D]/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="w-full max-w-md bg-white border border-[#ECE9E4] rounded-3xl p-6 shadow-[0_20px_60px_rgba(0,0,0,0.15)] relative animate-in zoom-in-95 duration-150">
+          <div
+            ref={editModalCardRef}
+            onFocus={handleEditModalFieldFocus}
+            className="editProfileModalCard w-full max-w-md bg-white border border-[#ECE9E4] rounded-3xl p-6 shadow-[0_20px_60px_rgba(0,0,0,0.15)] relative animate-in zoom-in-95 duration-150 overflow-y-auto overscroll-contain"
+            style={{ WebkitOverflowScrolling: 'touch' }}
+          >
             
             <h3 className="font-display text-xl font-bold text-[#1B1B1D] border-b border-[#ECE9E4] pb-2 mb-4">
               Edit profile
