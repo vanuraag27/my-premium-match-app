@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../lib/mongodb';
 import { isConversationApproved } from '../../../services/messageRequestHelpers';
+import { isUserBlocked } from '../../../services/blockHelpers';
 
 // Fetch chat history — only allowed for approved conversations
 export async function GET(req) {
@@ -66,6 +67,21 @@ export async function POST(req) {
           success: false,
           error: 'Messaging requires an accepted message request. Send a message request first.',
           requiresApproval: true,
+        },
+        { status: 403 }
+      );
+    }
+
+    // Security: the recipient may have blocked the sender — server-side
+    // enforcement so this cannot be bypassed by calling the API directly,
+    // regardless of what the client UI allows.
+    const blockedByRecipient = await isUserBlocked(db, receiverId, senderId);
+    if (blockedByRecipient) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'You cannot send messages because this user has blocked communication.',
+          blocked: true,
         },
         { status: 403 }
       );

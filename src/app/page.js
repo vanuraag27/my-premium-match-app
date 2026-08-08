@@ -52,6 +52,13 @@ export default function Home() {
   const [chatMessage, setChatMessage] = useState('');
   const [chatLogs, setChatLogs] = useState([]);
 
+  // User Block / Unblock Messaging Feature States
+  const [blockStatus, setBlockStatus] = useState({ iBlockedThem: false, theyBlockedMe: false });
+  const [showBlockMenu, setShowBlockMenu] = useState(false);
+  const [showBlockConfirm, setShowBlockConfirm] = useState(false);
+  const [blockActionLoading, setBlockActionLoading] = useState(false);
+  const blockMenuRef = useRef(null);
+
   // Message Request Approval System States
   const [messageRequests, setMessageRequests] = useState([]);
   const [connectionStatuses, setConnectionStatuses] = useState({});
@@ -310,7 +317,7 @@ export default function Home() {
   };
 
   // Handle message button click based on connection status
-  const handleMessageClick = (item) => {
+  const handleMessageClick = async (item) => {
     const status = connectionStatuses[item.userId] || 'none';
     if (status === 'accepted') {
       setActiveChatMatch(item);
@@ -321,6 +328,21 @@ export default function Home() {
     } else if (status === 'rejected') {
       showToast('Your message request was declined. Messaging is not available.');
     } else {
+      // Proactive block check before opening the send-request modal
+      if (userProfile?.userId) {
+        try {
+          const res = await fetch(
+            `/api/block?userId=${encodeURIComponent(userProfile.userId)}&otherUserId=${encodeURIComponent(item.userId)}`
+          );
+          const data = await res.json();
+          if (data.success && data.theyBlockedMe) {
+            showToast('You cannot send messages because this user has blocked communication.');
+            return;
+          }
+        } catch (err) {
+          console.error('Block status check failed:', err);
+        }
+      }
       setRequestTargetMatch(item);
       setRequestMessageText('');
       setShowSendRequestModal(true);
@@ -344,7 +366,15 @@ export default function Home() {
         }),
       });
       const result = await response.json();
-      if (!result.success) throw new Error(result.error || 'Failed to send message request.');
+      if (!result.success) {
+        if (result.blocked) {
+          showToast('You cannot send messages because this user has blocked communication.');
+          setShowSendRequestModal(false);
+          setRequestMessageText('');
+          return;
+        }
+        throw new Error(result.error || 'Failed to send message request.');
+      }
       showToast('Message request sent! Waiting for approval.');
       setShowSendRequestModal(false);
       setRequestMessageText('');
@@ -494,6 +524,50 @@ export default function Home() {
     }
     return () => clearInterval(internalTimer);
   }, [activeChatMatch, userProfile]);
+
+  // Fetch the block relationship (did I block them / did they block me)
+  // whenever a chat is opened, and keep it refreshed on a short poll so
+  // both sides see a block/unblock take effect quickly without a reload.
+  useEffect(() => {
+    if (!userProfile?.userId || !activeChatMatch?.userId) {
+      setBlockStatus({ iBlockedThem: false, theyBlockedMe: false });
+      return;
+    }
+
+    let cancelled = false;
+    const loadBlockStatus = async () => {
+      try {
+        const res = await fetch(
+          `/api/block?userId=${encodeURIComponent(userProfile.userId)}&otherUserId=${encodeURIComponent(activeChatMatch.userId)}`
+        );
+        const data = await res.json();
+        if (!cancelled && data.success) {
+          setBlockStatus({ iBlockedThem: !!data.iBlockedThem, theyBlockedMe: !!data.theyBlockedMe });
+        }
+      } catch (err) {
+        console.error('Failed to load block status:', err);
+      }
+    };
+
+    loadBlockStatus();
+    const blockStatusTimer = setInterval(loadBlockStatus, 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(blockStatusTimer);
+    };
+  }, [activeChatMatch, userProfile?.userId]);
+
+  // Close the chat options (Block/Unblock) menu when clicking outside it
+  useEffect(() => {
+    if (!showBlockMenu) return;
+    const handleClickOutside = (e) => {
+      if (blockMenuRef.current && !blockMenuRef.current.contains(e.target)) {
+        setShowBlockMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showBlockMenu]);
 
   const handleRequestOtp = async (e) => {
     e.preventDefault();
@@ -672,6 +746,7 @@ export default function Home() {
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!chatMessage.trim() || !userProfile?.userId || !activeChatMatch?.userId) return;
+    if (blockStatus.theyBlockedMe) return; // Input is disabled in this state; guard defensively
 
     const textToSend = chatMessage.trim();
     setChatMessage('');
@@ -691,9 +766,73 @@ export default function Home() {
         setChatLogs((prev) => [...prev, result.message]);
       } else if (result.requiresApproval) {
         showToast('Messaging requires an accepted message request.');
+      } else if (result.blocked) {
+        setBlockStatus((prev) => ({ ...prev, theyBlockedMe: true }));
+        showToast('You cannot send messages because this user has blocked communication.');
+      } else {
+        showToast(result.error || 'Failed to send message.');
+        setChatMessage(textToSend);
       }
     } catch (err) {
       console.error("Signal payload routing error:", err);
+      setChatMessage(textToSend);
+    }
+  };
+
+  // Open the block confirmation dialog for the active chat match
+  const handleRequestBlockUser = () => {
+    setShowBlockMenu(false);
+    setShowBlockConfirm(true);
+  };
+
+  // Confirm and execute blocking the active chat match
+  const handleConfirmBlockUser = async () => {
+    if (!userProfile?.userId || !activeChatMatch?.userId) return;
+    setBlockActionLoading(true);
+    try {
+      const response = await fetch('/api/block', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          blockerUserId: userProfile.userId,
+          blockedUserId: activeChatMatch.userId,
+        }),
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error || 'Failed to block user.');
+      setBlockStatus((prev) => ({ ...prev, iBlockedThem: true }));
+      showToast('User blocked successfully.');
+    } catch (err) {
+      showToast(err.message || 'Error blocking user.');
+    } finally {
+      setBlockActionLoading(false);
+      setShowBlockConfirm(false);
+    }
+  };
+
+  // Unblock the active chat match — messaging is restored immediately,
+  // existing conversation and match remain untouched.
+  const handleUnblockUser = async () => {
+    if (!userProfile?.userId || !activeChatMatch?.userId) return;
+    setShowBlockMenu(false);
+    setBlockActionLoading(true);
+    try {
+      const response = await fetch('/api/block', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          blockerUserId: userProfile.userId,
+          blockedUserId: activeChatMatch.userId,
+        }),
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error || 'Failed to unblock user.');
+      setBlockStatus((prev) => ({ ...prev, iBlockedThem: false }));
+      showToast('User unblocked successfully.');
+    } catch (err) {
+      showToast(err.message || 'Error unblocking user.');
+    } finally {
+      setBlockActionLoading(false);
     }
   };
 
@@ -715,6 +854,9 @@ export default function Home() {
     setShowRequestsPanel(false);
     setShowSendRequestModal(false);
     setActiveChatMatch(null);
+    setBlockStatus({ iBlockedThem: false, theyBlockedMe: false });
+    setShowBlockMenu(false);
+    setShowBlockConfirm(false);
     setStep('EMAIL');
     setError('');
     showToast("Session connection terminated successfully.");
@@ -1280,6 +1422,42 @@ export default function Home() {
                 {userProfile?.audioNotificationsEnabled ? '🔔' : '🔕'}
               </button>
 
+              {/* Chat Options Menu — Block / Unblock User */}
+              <div className="relative" ref={blockMenuRef}>
+                <button
+                  type="button"
+                  title="Chat options"
+                  onClick={() => setShowBlockMenu((prev) => !prev)}
+                  className="p-1.5 rounded-full border text-xs bg-white border-[#ECE9E4] text-[#6E6D72] hover:bg-[#F1EFEB] flex items-center justify-center transition-colors leading-none"
+                >
+                  ⋮
+                </button>
+
+                {showBlockMenu && (
+                  <div className="absolute right-0 top-full mt-1.5 w-44 bg-white border border-[#ECE9E4] rounded-2xl shadow-[0_12px_30px_rgba(0,0,0,0.12)] py-1.5 z-20 animate-in fade-in zoom-in-95 duration-100">
+                    {blockStatus.iBlockedThem ? (
+                      <button
+                        type="button"
+                        onClick={handleUnblockUser}
+                        disabled={blockActionLoading}
+                        className="w-full text-left px-3.5 py-2 text-xs font-body font-semibold text-[#1E9E6B] hover:bg-[#F1EFEB] disabled:opacity-50 transition-colors"
+                      >
+                        Unblock User
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleRequestBlockUser}
+                        disabled={blockActionLoading}
+                        className="w-full text-left px-3.5 py-2 text-xs font-body font-semibold text-[#EF3E56] hover:bg-[#FFF1E9] disabled:opacity-50 transition-colors"
+                      >
+                        Block User
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <button 
                 onClick={() => setActiveChatMatch(null)} 
                 className="text-[#6E6D72] hover:text-[#1B1B1D] text-sm font-bold bg-white w-6 h-6 rounded-full flex items-center justify-center border border-[#ECE9E4] transition"
@@ -1304,10 +1482,30 @@ export default function Home() {
           </div>
 
           {/* Message Input Payload Form */}
-          <form onSubmit={handleSendMessage} className="p-3 bg-white border-t border-[#ECE9E4] flex gap-2">
-            <input type="text" placeholder="Type a message..." value={chatMessage} onChange={(e) => setChatMessage(e.target.value)} className="flex-1 bg-[#FAF8F5] border border-[#ECE9E4] rounded-full px-3 py-2 text-xs text-[#1B1B1D] focus:outline-none focus:border-[#EF3E56] font-body" />
-            <button type="submit" disabled={!chatMessage.trim()} className="px-4 bg-[#EF3E56] hover:bg-[#D42E44] disabled:bg-[#DAD7D2] disabled:text-white text-white text-xs font-display font-bold rounded-full shadow-[0_6px_16px_rgba(239,62,86,0.3)] transition duration-150">Send</button>
-          </form>
+          <div className="bg-white border-t border-[#ECE9E4]">
+            {blockStatus.theyBlockedMe && (
+              <p className="text-[10px] font-body text-[#EF3E56] bg-[#FFF1E9] border border-[#FFD9C2] rounded-xl mx-3 mt-2.5 px-3 py-2 text-center">
+                You cannot send messages because this user has blocked communication.
+              </p>
+            )}
+            <form onSubmit={handleSendMessage} className="p-3 flex gap-2">
+              <input
+                type="text"
+                placeholder={blockStatus.theyBlockedMe ? "Messaging unavailable" : "Type a message..."}
+                value={chatMessage}
+                onChange={(e) => setChatMessage(e.target.value)}
+                disabled={blockStatus.theyBlockedMe}
+                className="flex-1 bg-[#FAF8F5] border border-[#ECE9E4] rounded-full px-3 py-2 text-xs text-[#1B1B1D] focus:outline-none focus:border-[#EF3E56] font-body disabled:opacity-60 disabled:cursor-not-allowed"
+              />
+              <button
+                type="submit"
+                disabled={!chatMessage.trim() || blockStatus.theyBlockedMe}
+                className="px-4 bg-[#EF3E56] hover:bg-[#D42E44] disabled:bg-[#DAD7D2] disabled:text-white text-white text-xs font-display font-bold rounded-full shadow-[0_6px_16px_rgba(239,62,86,0.3)] transition duration-150"
+              >
+                Send
+              </button>
+            </form>
+          </div>
 
         </div>
       )}
@@ -1420,6 +1618,37 @@ export default function Home() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Block User Confirmation Dialog */}
+      {showBlockConfirm && activeChatMatch && (
+        <div className="fixed inset-0 bg-[#1B1B1D]/40 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
+          <div className="w-full max-w-md bg-white border border-[#ECE9E4] rounded-3xl p-6 shadow-[0_20px_60px_rgba(0,0,0,0.15)] relative animate-in zoom-in-95 duration-150">
+            <h3 className="font-display text-xl font-bold text-[#1B1B1D] border-b border-[#ECE9E4] pb-2 mb-4">
+              Block User
+            </h3>
+            <p className="text-xs text-[#6E6D72] font-body mb-5">
+              Are you sure you want to block {activeChatMatch.name || 'this user'}? They will no longer be able to send you messages until you unblock them.
+            </p>
+            <div className="flex justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setShowBlockConfirm(false)}
+                className="px-4 py-2 bg-[#F1EFEB] hover:bg-[#E9E6E1] text-[#1B1B1D] rounded-full font-bold transition font-display border border-[#ECE9E4] text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmBlockUser}
+                disabled={blockActionLoading}
+                className="px-5 py-2 bg-[#EF3E56] hover:bg-[#D42E44] text-white font-bold rounded-full transition shadow-[0_8px_20px_rgba(239,62,86,0.3)] font-display text-xs disabled:opacity-50"
+              >
+                {blockActionLoading ? 'Blocking…' : 'Block User'}
+              </button>
+            </div>
           </div>
         </div>
       )}

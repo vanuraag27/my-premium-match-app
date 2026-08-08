@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "migrate:blocks": "node scripts/migrations/001-ensure-blocks-collection.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

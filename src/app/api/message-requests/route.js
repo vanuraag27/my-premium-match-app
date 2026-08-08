@@ -5,6 +5,7 @@ import {
   REQUEST_STATUS,
   createNotification,
 } from '../../../services/messageRequestHelpers';
+import { isUserBlocked } from '../../../services/blockHelpers';
 
 async function getDatabase() {
   const client = await clientPromise;
@@ -88,15 +89,29 @@ export async function POST(req) {
       );
     }
 
+    const db = await getDatabase();
+    await ensureMessageRequestIndexes(db);
+
+    // Security: the receiver may have blocked the sender — server-side
+    // enforcement so a new request cannot be used to bypass a block.
+    const blockedByReceiver = await isUserBlocked(db, rid, sid);
+    if (blockedByReceiver) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'You cannot send messages because this user has blocked communication.',
+          blocked: true,
+        },
+        { status: 403 }
+      );
+    }
+
     if (firstMessage.trim().length > 1000) {
       return NextResponse.json(
         { success: false, error: 'First message exceeds maximum length of 1000 characters.' },
         { status: 400 }
       );
     }
-
-    const db = await getDatabase();
-    await ensureMessageRequestIndexes(db);
 
     // Prevent duplicate pending requests between the same pair
     const existingPending = await db.collection('message_requests').findOne({
