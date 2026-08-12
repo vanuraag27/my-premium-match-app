@@ -10,6 +10,9 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [toastMessage, setToastMessage] = useState('');
+  // True only while we're checking for a persisted session on first mount —
+  // prevents a flash of the login form before we know whether to restore.
+  const [isRestoringSession, setIsRestoringSession] = useState(true);
   
   // Multiphase Navigation State Matrix
   const [step, setStep] = useState('EMAIL'); // 'EMAIL', 'OTP', 'REGISTER'
@@ -75,6 +78,26 @@ export default function Home() {
   const activeChatKeyRef = useRef(null);
   const seenNotificationIdsRef = useRef(new Set());
 
+  // --- Unread Message Indicator state (drives the green Message button) ---
+  // Set of userIds whose Message button should currently render GREEN.
+  const [unreadSenderIds, setUnreadSenderIds] = useState(new Set());
+  // Dedupe ref so the same unread message never re-triggers the audio ping twice.
+  const seenUnreadMessageIdsRef = useRef(new Set());
+
+  // Snapshot of the last *applied* (submitted) match filters — kept separate
+  // from the live searchProfession/searchKeyword/etc. state so the
+  // background match-refresh poll (Problem 1) never applies a filter the
+  // user has only typed but not yet clicked "Apply Filters" for. Updated
+  // wherever the app already applies filters (login, register, edit,
+  // Apply Filters).
+  const appliedFiltersRef = useRef({
+    searchProfession: '',
+    searchKeyword: '',
+    matchFilterEnabled: false,
+    minMatchPercent: 75,
+    maxMatchPercent: 100,
+  });
+
   // Reusable helper for handling local image uploads
   const handlePhotoUpload = (e, setForm, setErrorState) => {
     const file = e.target.files?.[0];
@@ -125,6 +148,69 @@ export default function Home() {
     return () => {
       audio.pause();
       notificationAudioRef.current = null;
+    };
+  }, []);
+
+  // Populate userProfile/matches/connectionStatuses/editForm from an
+  // onboarding API response. Shared by the OTP login flow and the session
+  // restore-on-refresh flow below so both hydrate state identically.
+  const applyProfileAndMatches = (profile, matchesList) => {
+    setUserProfile(profile);
+    setMatches(matchesList || []);
+    const statusMap = {};
+    (matchesList || []).forEach((m) => {
+      if (m.connectionStatus) statusMap[m.userId] = m.connectionStatus;
+    });
+    setConnectionStatuses(statusMap);
+    setEditForm({
+      name: profile.name || '',
+      profession: profile.profession || '',
+      rawBio: profile.rawBio || '',
+      photoUrl: profile.photoUrl || '',
+      audioNotificationsEnabled: profile.audioNotificationsEnabled !== undefined ? profile.audioNotificationsEnabled : true
+    });
+  };
+
+  // Restore an existing session on mount (e.g. after a page refresh).
+  // Validates the signed HttpOnly session cookie issued by /api/auth/verify-otp
+  // via the server (client JS never reads/writes it), then reuses the exact
+  // same profile+matches load the OTP flow already performs — so a refresh
+  // lands on the same dashboard instead of forcing a fresh login.
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const sessionRes = await fetch('/api/auth/session');
+        const sessionData = await sessionRes.json();
+        if (cancelled) return;
+
+        if (!sessionData.success || !sessionData.authenticated || !sessionData.userId) {
+          setIsRestoringSession(false);
+          return;
+        }
+
+        const profileRes = await fetch(`/api/onboarding?userId=${encodeURIComponent(sessionData.userId)}`);
+        const profileData = await profileRes.json();
+        if (cancelled) return;
+
+        if (profileData.success && profileData.exists) {
+          applyProfileAndMatches(profileData.profile, profileData.matches);
+        }
+        // If the profile no longer exists (e.g. deleted), just fall back to
+        // the login screen — nothing to restore, no error to surface.
+      } catch (err) {
+        // Temporary network failure: don't force a logout, just fall back
+        // to showing the login screen for this load. A later refresh (or
+        // reconnect) will retry the session check.
+        console.error('Failed to restore session:', err);
+      } finally {
+        if (!cancelled) setIsRestoringSession(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
     };
   }, []);
 
@@ -256,17 +342,110 @@ export default function Home() {
     }
   };
 
-  // Poll message requests and notifications while logged in
+  // Poll for unread messages across all conversations. This is what allows the
+  // Message button to turn GREEN and the audio notification to ring immediately
+  // even when the corresponding chat window is closed — the existing per-chat
+  // polling loop below only runs while a conversation is actively open.
+  const pollUnreadMessages = async (userId) => {
+    if (!userId) return;
+    try {
+      const res = await fetch(`/api/messages/unread?userId=${encodeURIComponent(userId)}`);
+      const data = await res.json();
+      if (!data.success || !Array.isArray(data.unreadMessages)) return;
+
+      // Whichever chat (if any) is currently open already has its own
+      // audio-on-arrival handling further below, so it's excluded here to
+      // avoid ringing the notification twice for the same incoming message.
+      const openChatUserId = activeChatMatch?.userId ? String(activeChatMatch.userId) : null;
+
+      const newlySeenIds = [];
+      let shouldPlaySound = false;
+
+      data.unreadMessages.forEach((msg) => {
+        const idStr = String(msg._id);
+        if (!seenUnreadMessageIdsRef.current.has(idStr)) {
+          newlySeenIds.push(idStr);
+          if (String(msg.senderId) !== openChatUserId) {
+            shouldPlaySound = true;
+          }
+        }
+      });
+
+      if (newlySeenIds.length > 0) {
+        newlySeenIds.forEach((id) => seenUnreadMessageIdsRef.current.add(id));
+      }
+      if (shouldPlaySound) {
+        playNotificationSound();
+      }
+
+      // Green button applies to every sender with an unread message, except
+      // the conversation that's currently open (nothing to "unread" there).
+      const nextUnreadSenderIds = new Set(
+        data.unreadMessages
+          .map((msg) => String(msg.senderId))
+          .filter((sid) => sid !== openChatUserId)
+      );
+      setUnreadSenderIds(nextUnreadSenderIds);
+    } catch (err) {
+      console.error('Failed to poll unread messages:', err);
+    }
+  };
+
+  // Poll for newly-eligible matches (e.g. users who registered after this
+  // dashboard session started) so they appear automatically without a
+  // manual refresh or re-login. Reuses the existing GET /api/onboarding
+  // matching/filtering pipeline — the exact same one a normal dashboard
+  // load already uses — so a new profile appears exactly as it would after
+  // a manual refresh, filtered by whatever the user last applied via
+  // "Apply Filters" (not by unsubmitted, still-being-typed filter text).
+  const refreshMatches = async (userId) => {
+    if (!userId) return;
+    try {
+      const { searchProfession: appliedProfession, searchKeyword: appliedKeyword, matchFilterEnabled: appliedFilterEnabled, minMatchPercent: appliedMin, maxMatchPercent: appliedMax } = appliedFiltersRef.current;
+
+      const params = new URLSearchParams({ userId });
+      if (appliedProfession.trim()) params.set('searchProfession', appliedProfession.trim());
+      if (appliedKeyword.trim()) params.set('searchKeyword', appliedKeyword.trim());
+      if (appliedFilterEnabled) {
+        params.set('minMatchPercent', appliedMin);
+        params.set('maxMatchPercent', appliedMax);
+      }
+
+      const res = await fetch(`/api/onboarding?${params.toString()}`);
+      const data = await res.json();
+      if (!data.success || !data.exists || !Array.isArray(data.matches)) return;
+
+      // The backend query already excludes the current user and returns one
+      // entry per unique userId, so a full replace here can never introduce
+      // a duplicate — it's the same guarantee a manual refresh already relies on.
+      setMatches(data.matches);
+      const statusMap = {};
+      data.matches.forEach((m) => {
+        if (m.connectionStatus) statusMap[m.userId] = m.connectionStatus;
+      });
+      setConnectionStatuses((prev) => ({ ...prev, ...statusMap }));
+    } catch (err) {
+      console.error('Failed to refresh matches:', err);
+    }
+  };
+
+  // Poll message requests, notifications, unread messages, and newly
+  // eligible matches while logged in — a single shared interval reusing the
+  // app's existing polling architecture rather than introducing a second one.
   useEffect(() => {
     if (!userProfile?.userId) return;
     loadMessageRequests(userProfile.userId);
     pollNotifications(userProfile.userId);
+    pollUnreadMessages(userProfile.userId);
+    refreshMatches(userProfile.userId);
     const timer = setInterval(() => {
       loadMessageRequests(userProfile.userId);
       pollNotifications(userProfile.userId);
+      pollUnreadMessages(userProfile.userId);
+      refreshMatches(userProfile.userId);
     }, 5000);
     return () => clearInterval(timer);
-  }, [userProfile?.userId]);
+  }, [userProfile?.userId, activeChatMatch]);
 
   // Lock background scrolling while the Edit Profile modal is open,
   // so only the popup itself scrolls (desktop + mobile, including iOS rubber-banding)
@@ -321,6 +500,15 @@ export default function Home() {
     const status = connectionStatuses[item.userId] || 'none';
     if (status === 'accepted') {
       setActiveChatMatch(item);
+      // Clear the GREEN unread indicator immediately on click — the server
+      // marks the underlying messages read as soon as the chat's message
+      // fetch runs, but the button shouldn't wait on the next 5s poll.
+      setUnreadSenderIds((prev) => {
+        if (!prev.has(String(item.userId))) return prev;
+        const next = new Set(prev);
+        next.delete(String(item.userId));
+        return next;
+      });
     } else if (status === 'pending_sent') {
       showToast('Your message request is pending approval.');
     } else if (status === 'pending_received') {
@@ -612,20 +800,7 @@ export default function Home() {
       if (!checkResult.success) throw new Error(checkResult.error || 'Profile matrix trace exception.');
 
       if (checkResult.exists) {
-        setUserProfile(checkResult.profile);
-        setMatches(checkResult.matches);
-        const statusMap = {};
-        (checkResult.matches || []).forEach((m) => {
-          if (m.connectionStatus) statusMap[m.userId] = m.connectionStatus;
-        });
-        setConnectionStatuses(statusMap);
-        setEditForm({
-          name: checkResult.profile.name || '',
-          profession: checkResult.profile.profession || '',
-          rawBio: checkResult.profile.rawBio || '',
-          photoUrl: checkResult.profile.photoUrl || '',
-          audioNotificationsEnabled: checkResult.profile.audioNotificationsEnabled !== undefined ? checkResult.profile.audioNotificationsEnabled : true
-        });
+        applyProfileAndMatches(checkResult.profile, checkResult.matches);
         showToast("Gateway connection verification authenticated.");
       } else {
         setStep('REGISTER');
@@ -705,6 +880,13 @@ export default function Home() {
         if (m.connectionStatus) statusMap[m.userId] = m.connectionStatus;
       });
       setConnectionStatuses(statusMap);
+      appliedFiltersRef.current = {
+        searchProfession,
+        searchKeyword,
+        matchFilterEnabled,
+        minMatchPercent,
+        maxMatchPercent,
+      };
       setIsEditModalOpen(false);
       showToast("Profile schema changes safely written down to cluster indexing shards.");
     } catch (err) {
@@ -735,6 +917,13 @@ export default function Home() {
         if (m.connectionStatus) statusMap[m.userId] = m.connectionStatus;
       });
       setConnectionStatuses((prev) => ({ ...prev, ...statusMap }));
+      appliedFiltersRef.current = {
+        searchProfession,
+        searchKeyword,
+        matchFilterEnabled,
+        minMatchPercent,
+        maxMatchPercent,
+      };
       showToast("Vector matching array search calculation index refreshed.");
     } catch (err) {
       setError(err.message || 'Timeout tracing query segments.');
@@ -837,6 +1026,13 @@ export default function Home() {
   };
 
   const handleLogOut = () => {
+    // Clear the signed session cookie server-side. Fire-and-forget: the
+    // client-side state reset below happens regardless, and this is what
+    // actually ends the session so a later refresh can't silently restore it.
+    fetch('/api/auth/session', { method: 'DELETE' }).catch((err) => {
+      console.error('Failed to clear session cookie on logout:', err);
+    });
+
     setUserProfile(null);
     setMatches([]);
     setInputEmail('');
@@ -849,6 +1045,13 @@ export default function Home() {
     setMatchFilterEnabled(false);
     setMinMatchPercent(75);
     setMaxMatchPercent(100);
+    appliedFiltersRef.current = {
+      searchProfession: '',
+      searchKeyword: '',
+      matchFilterEnabled: false,
+      minMatchPercent: 75,
+      maxMatchPercent: 100,
+    };
     setMessageRequests([]);
     setConnectionStatuses({});
     setShowRequestsPanel(false);
@@ -981,8 +1184,16 @@ export default function Home() {
         </div>
       )}
 
+      {/* Brief loading state while we check for an existing session on mount —
+          avoids flashing the login form before we know whether to restore it */}
+      {isRestoringSession && !userProfile && (
+        <div className="w-full max-w-md bg-white border border-[#ECE9E4] rounded-3xl p-8 shadow-[0_12px_40px_rgba(0,0,0,0.06)] text-center">
+          <p className="text-sm text-[#6E6D72] font-body">Restoring your session…</p>
+        </div>
+      )}
+
       {/* STEP CONFIGURATOR ROUTING GATEWAY MODAL */}
-      {!userProfile && (
+      {!userProfile && !isRestoringSession && (
         <div className="w-full max-w-md bg-white border border-[#ECE9E4] rounded-3xl p-6 md:p-8 shadow-[0_12px_40px_rgba(0,0,0,0.06)]">
           
           {step === 'EMAIL' && (
@@ -1277,12 +1488,15 @@ export default function Home() {
                   <div className="mt-4 pt-3 border-t border-[#ECE9E4] flex justify-end">
                     {(() => {
                       const status = connectionStatuses[item.userId] || 'none';
+                      const hasUnread = status === 'accepted' && unreadSenderIds.has(String(item.userId));
                       const btnLabel = status === 'accepted' ? 'Message'
                         : status === 'pending_sent' ? 'Request Pending'
                         : status === 'pending_received' ? 'Respond to Request'
                         : status === 'rejected' ? 'Declined'
                         : 'Send Request';
-                      const btnClass = status === 'accepted'
+                      const btnClass = hasUnread
+                        ? 'bg-[#1E9E6B] hover:bg-[#178A5E] text-white'
+                        : status === 'accepted'
                         ? 'bg-[#EF3E56] hover:bg-[#D42E44] text-white'
                         : status === 'pending_sent'
                         ? 'bg-[#FFF1E9] text-[#B23349] border border-[#FFD9C2] cursor-default'
@@ -1395,7 +1609,7 @@ export default function Home() {
 
       {/* DYNAMIC DATABASE MESSAGING OVERLAY DRAWER */}
       {activeChatMatch && (
-        <div className="fixed bottom-6 right-6 w-full max-w-sm bg-white border border-[#ECE9E4] rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.15)] overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-4 duration-200">
+        <div className="fixed bottom-6 left-6 right-6 sm:left-auto w-auto sm:w-full max-w-sm bg-white border border-[#ECE9E4] rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.15)] overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-4 duration-200">
           
           {/* Header with Audio Toggle Control */}
           <div className="bg-[#FFF1E9] px-4 py-3 border-b border-[#ECE9E4] flex items-center justify-between">
