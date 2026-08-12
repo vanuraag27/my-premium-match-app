@@ -36,6 +36,18 @@ export async function GET(req) {
     .sort({ timestamp: 1 })
     .toArray();
 
+    // The caller (senderId param) is actively viewing this conversation —
+    // mark any messages sent TO them by the other party as read so the
+    // unread indicator/green Message button clears once the chat is open.
+    await db.collection('messages').updateMany(
+      {
+        senderId: String(receiverId),
+        receiverId: String(senderId),
+        read: { $ne: true },
+      },
+      { $set: { read: true } }
+    );
+
     return NextResponse.json({ success: true, messages: conversationHistory });
   } catch (error) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
@@ -110,7 +122,8 @@ export async function POST(req) {
       senderId: String(senderId),
       receiverId: String(receiverId),
       messageText: messageText.trim(),
-      timestamp: new Date() // Native BSON Date for TTL auto-deletion
+      timestamp: new Date(), // Native BSON Date for TTL auto-deletion
+      read: false // Tracks unread status for the receiver's Message button indicator
     };
 
     const result = await db.collection('messages').insertOne(entryPayload);

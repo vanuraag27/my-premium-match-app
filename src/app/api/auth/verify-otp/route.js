@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { createSessionToken, SESSION_COOKIE_NAME, getSessionCookieOptions } from '../../../../services/sessionHelpers';
 
 export async function POST(req) {
   try {
@@ -26,10 +27,12 @@ export async function POST(req) {
 
     if (isTestEmail && String(otpToken).trim() === '123456') {
       console.log(`✅ Google Play Reviewer bypass authenticated successfully for: ${email}`);
-      return NextResponse.json({
+      const response = NextResponse.json({
         success: true,
         message: 'Identity vector authenticated successfully (Reviewer Test Mode).'
       });
+      response.cookies.set(SESSION_COOKIE_NAME, createSessionToken(email), getSessionCookieOptions());
+      return response;
     }
 
     // =========================================================================
@@ -64,10 +67,15 @@ export async function POST(req) {
     global.otpCache.delete(email);
     console.log(`✅ Token authorization succeeded for node identity: ${email}`);
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       message: 'Identity vector authenticated successfully.'
     });
+    // Issue a signed, HttpOnly session cookie so a later page refresh can
+    // silently re-validate this login via /api/auth/session instead of
+    // forcing the user through the OTP flow again.
+    response.cookies.set(SESSION_COOKIE_NAME, createSessionToken(email), getSessionCookieOptions());
+    return response;
 
   } catch (error) {
     console.error("Token verification engine failure:", error);

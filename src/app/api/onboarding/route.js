@@ -110,6 +110,24 @@ export async function GET(req) {
 
     // Fetch potential partner matching items excluding self
     const searchCriteria = { userId: { $ne: userId } };
+
+    // Optional profession/keyword search filters (mirrors POST's filtering
+    // logic) so read-only polling can respect the same search the user has
+    // applied, without needing to go through the profile-updating POST route.
+    const searchProfession = searchParams.get('searchProfession');
+    const searchKeyword = searchParams.get('searchKeyword');
+
+    if (searchProfession && searchProfession.trim() !== '') {
+      searchCriteria.profession = { $regex: searchProfession.trim(), $options: 'i' };
+    }
+
+    if (searchKeyword && searchKeyword.trim() !== '') {
+      searchCriteria.$or = [
+        { name: { $regex: searchKeyword.trim(), $options: 'i' } },
+        { rawBio: { $regex: searchKeyword.trim(), $options: 'i' } }
+      ];
+    }
+
     const rawMatchesList = await collection.find(searchCriteria).limit(20).toArray();
 
     const formattedMatches = rawMatchesList.map((item) => {
