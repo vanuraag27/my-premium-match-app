@@ -2,6 +2,39 @@ import { NextResponse } from 'next/server';
 import clientPromise from '../../../lib/mongodb';
 import { getConnectionStatus } from '../../../services/messageRequestHelpers';
 
+// Common English filler words + generic dating-bio filler words, excluded so
+// keyword overlap rewards genuinely distinctive shared interests/traits
+// (e.g. "hiking", "vegetarian", "startup") rather than words nearly every
+// bio contains regardless of actual compatibility.
+const BIO_STOPWORDS = new Set([
+  'the', 'and', 'for', 'with', 'that', 'this', 'from', 'have', 'has', 'had',
+  'are', 'was', 'were', 'been', 'being', 'i', 'im', 'me', 'my', 'mine',
+  'you', 'your', 'yours', 'he', 'him', 'his', 'she', 'her', 'hers', 'it',
+  'its', 'we', 'us', 'our', 'ours', 'they', 'them', 'their', 'theirs',
+  'a', 'an', 'of', 'in', 'on', 'at', 'to', 'by', 'as', 'is', 'am', 'be',
+  'but', 'or', 'not', 'no', 'so', 'if', 'then', 'than', 'too', 'very',
+  'just', 'also', 'about', 'into', 'over', 'after', 'before', 'while',
+  'who', 'whom', 'which', 'what', 'when', 'where', 'why', 'how', 'can',
+  'could', 'will', 'would', 'shall', 'should', 'may', 'might', 'must',
+  'do', 'does', 'did', 'doing', 'up', 'down', 'out', 'off', 'again',
+  'once', 'here', 'there', 'all', 'any', 'both', 'each', 'few', 'more',
+  'most', 'other', 'some', 'such', 'only', 'own', 'same', 'now', 'love',
+  'looking', 'like', 'enjoy', 'person', 'someone', 'life', 'people', 'get',
+  'really', 'always', 'still', 'much', 'lot', 'lots', 'good', 'great', 'new'
+]);
+
+// Break a bio into a set of meaningful, comparable keywords: lowercase,
+// alphabetic-only tokens of length >= 3, with filler words removed.
+function extractBioKeywords(text) {
+  return new Set(
+    (text || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter((word) => word.length >= 3 && /[a-z]/.test(word) && !BIO_STOPWORDS.has(word))
+  );
+}
+
 // Helper function to calculate a real vector alignment score based on shared keywords
 function calculateVectorScore(user, match) {
   let base = 70;
@@ -12,17 +45,15 @@ function calculateVectorScore(user, match) {
   if (userProf === matchProf && userProf !== '') base += 15;
   else if (userProf.includes(matchProf) || matchProf.includes(userProf)) base += 8;
 
-  // Bio String Keyword Intersections bonus
-  const userBioWords = (user.rawBio || '').toLowerCase().split(/\s+/);
-  const matchBio = (match.rawBio || '').toLowerCase();
-  
+  // Bio Keyword Intersection bonus — dynamically derived from each bio's own
+  // vocabulary (not a fixed word list), so it applies equally well to any
+  // profession or interest, not just tech-industry terms.
+  const userBioWords = extractBioKeywords(user.rawBio);
+  const matchBioWords = extractBioKeywords(match.rawBio);
+
   let keywordMatches = 0;
-  const targetKeywords = ['developer', 'engineer', 'design', 'finance', 'startup', 'tech', 'data', 'analyst', 'manager'];
-  
-  targetKeywords.forEach(word => {
-    if (userBioWords.includes(word) && matchBio.includes(word)) {
-      keywordMatches++;
-    }
+  userBioWords.forEach((word) => {
+    if (matchBioWords.has(word)) keywordMatches++;
   });
 
   base += Math.min(keywordMatches * 3, 14); // Caps keyword intersection bonus at 14%
@@ -45,6 +76,34 @@ function applyMatchPercentageFilter(matches, minMatchPercent, maxMatchPercent) {
   const max = hasMax ? Number(maxMatchPercent) : 100;
 
   return matches.filter((m) => m.score >= min && m.score <= max);
+}
+
+/**
+ * Apply gender/age preference filters after scores are computed.
+ * Only filters when the corresponding preference is explicitly provided.
+ *
+ * Backward compatibility: a candidate whose profile predates this feature
+ * (gender/age not set) is never excluded by that specific filter — only
+ * candidates who *have* a value that actually conflicts with the stated
+ * preference are filtered out. This keeps existing profiles/matches intact
+ * until people opt in by filling in the new optional fields.
+ */
+function applyPreferenceFilters(matches, { preferredGender, minAge, maxAge }) {
+  let result = matches;
+
+  if (preferredGender && preferredGender !== 'Any') {
+    result = result.filter((m) => !m.gender || m.gender === preferredGender);
+  }
+
+  const hasMinAge = minAge !== null && minAge !== undefined && minAge !== '';
+  const hasMaxAge = maxAge !== null && maxAge !== undefined && maxAge !== '';
+  if (hasMinAge || hasMaxAge) {
+    const min = hasMinAge ? Number(minAge) : 0;
+    const max = hasMaxAge ? Number(maxAge) : 200;
+    result = result.filter((m) => m.age === null || m.age === undefined || (m.age >= min && m.age <= max));
+  }
+
+  return result;
 }
 
 // Helper to safely resolve the MongoDB database instance
@@ -111,11 +170,12 @@ export async function GET(req) {
     // Fetch potential partner matching items excluding self
     const searchCriteria = { userId: { $ne: userId } };
 
-    // Optional profession/keyword search filters (mirrors POST's filtering
+    // Optional profession/keyword/location search filters (mirrors POST's filtering
     // logic) so read-only polling can respect the same search the user has
     // applied, without needing to go through the profile-updating POST route.
     const searchProfession = searchParams.get('searchProfession');
     const searchKeyword = searchParams.get('searchKeyword');
+    const searchLocation = searchParams.get('preferredLocation');
 
     if (searchProfession && searchProfession.trim() !== '') {
       searchCriteria.profession = { $regex: searchProfession.trim(), $options: 'i' };
@@ -126,6 +186,10 @@ export async function GET(req) {
         { name: { $regex: searchKeyword.trim(), $options: 'i' } },
         { rawBio: { $regex: searchKeyword.trim(), $options: 'i' } }
       ];
+    }
+
+    if (searchLocation && searchLocation.trim() !== '') {
+      searchCriteria.location = { $regex: searchLocation.trim(), $options: 'i' };
     }
 
     const rawMatchesList = await collection.find(searchCriteria).limit(20).toArray();
@@ -141,6 +205,9 @@ export async function GET(req) {
         bio: item.rawBio || 'No tracking bio information recorded.',
         photoUrl: item.photoUrl || '',
         profession: matchProfession,
+        gender: item.gender || '',
+        age: item.age ?? null,
+        location: item.location || '',
         score: calculatedScore,
         aiAnalysis: {
           communication: item.aiAnalysis?.communication || 'Synergistic Synchronous Stream',
@@ -156,7 +223,13 @@ export async function GET(req) {
     // Optional match percentage range filter from query params (GET login flow)
     const minMatchPercent = searchParams.get('minMatchPercent');
     const maxMatchPercent = searchParams.get('maxMatchPercent');
-    const filteredMatches = applyMatchPercentageFilter(formattedMatches, minMatchPercent, maxMatchPercent);
+    const scoreFilteredMatches = applyMatchPercentageFilter(formattedMatches, minMatchPercent, maxMatchPercent);
+
+    // Optional gender/age preference filters from query params
+    const preferredGender = searchParams.get('preferredGender');
+    const minAge = searchParams.get('minAge');
+    const maxAge = searchParams.get('maxAge');
+    const filteredMatches = applyPreferenceFilters(scoreFilteredMatches, { preferredGender, minAge, maxAge });
 
     // Enrich matches with connection status for message request workflow
     const matchesWithStatus = await Promise.all(
@@ -183,7 +256,7 @@ export async function GET(req) {
 export async function POST(req) {
   try {
     const body = await req.json();
-    const { userId, name, rawBio, photoUrl, profession, searchProfession, searchKeyword, audioNotificationsEnabled, minMatchPercent, maxMatchPercent } = body;
+    const { userId, name, rawBio, photoUrl, profession, gender, age, location, searchProfession, searchKeyword, preferredLocation, audioNotificationsEnabled, minMatchPercent, maxMatchPercent, preferredGender, minAge, maxAge } = body;
 
     if (!userId) {
       return NextResponse.json({ success: false, error: 'Missing active user node identifier.' }, { status: 400 });
@@ -213,6 +286,12 @@ export async function POST(req) {
       rawBio,
       photoUrl,
       profession: profession || 'Developer',
+      // Optional demographic fields powering the new preference filters —
+      // stored as empty/null when not provided, so existing profiles that
+      // predate this feature keep working exactly as before until edited.
+      gender: gender || '',
+      age: age !== undefined && age !== null && age !== '' ? Number(age) : null,
+      location: location || '',
       audioNotificationsEnabled: audioNotificationsEnabled !== undefined ? Boolean(audioNotificationsEnabled) : true,
       updatedAt: new Date(),
       aiAnalysis: body.aiAnalysis || {
@@ -242,6 +321,10 @@ export async function POST(req) {
       ];
     }
 
+    if (preferredLocation && preferredLocation.trim() !== '') {
+      searchCriteria.location = { $regex: preferredLocation.trim(), $options: 'i' };
+    }
+
     const rawMatchesList = await collection.find(searchCriteria).limit(20).toArray();
 
     const formattedMatches = rawMatchesList.map((item) => {
@@ -255,6 +338,9 @@ export async function POST(req) {
         bio: item.rawBio || 'No tracking bio information recorded.',
         photoUrl: item.photoUrl || '',
         profession: matchProfession,
+        gender: item.gender || '',
+        age: item.age ?? null,
+        location: item.location || '',
         score: calculatedScore,
         aiAnalysis: {
           communication: item.aiAnalysis?.communication || 'Synergistic Synchronous Stream',
@@ -268,7 +354,10 @@ export async function POST(req) {
     formattedMatches.sort((a, b) => b.score - a.score);
 
     // Apply match percentage range filter when provided via filter UI
-    const filteredMatches = applyMatchPercentageFilter(formattedMatches, minMatchPercent, maxMatchPercent);
+    const scoreFilteredMatches = applyMatchPercentageFilter(formattedMatches, minMatchPercent, maxMatchPercent);
+
+    // Apply gender/age preference filters when provided via filter UI
+    const filteredMatches = applyPreferenceFilters(scoreFilteredMatches, { preferredGender, minAge, maxAge });
 
     // Enrich matches with connection status for message request workflow
     const matchesWithStatus = await Promise.all(
