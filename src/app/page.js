@@ -26,6 +26,13 @@ export default function Home() {
   const [matchFilterEnabled, setMatchFilterEnabled] = useState(false);
   const [minMatchPercent, setMinMatchPercent] = useState(75);
   const [maxMatchPercent, setMaxMatchPercent] = useState(100);
+  // Location search — always-active text field, same pattern as profession/keyword
+  const [preferredLocation, setPreferredLocation] = useState('');
+  // Gender/age preference filter — disabled by default, same pattern as Match % filter
+  const [preferenceFilterEnabled, setPreferenceFilterEnabled] = useState(false);
+  const [preferredGender, setPreferredGender] = useState('Any');
+  const [minAge, setMinAge] = useState(18);
+  const [maxAge, setMaxAge] = useState(60);
 
   // Buffered Registration Form Matrix
   const [registerForm, setRegisterForm] = useState({
@@ -33,6 +40,9 @@ export default function Home() {
     profession: '',
     rawBio: '',
     photoUrl: '',
+    gender: '',
+    age: '',
+    location: '',
     audioNotificationsEnabled: true
   });
   const [registerImageError, setRegisterImageError] = useState('');
@@ -44,6 +54,9 @@ export default function Home() {
     profession: '',
     rawBio: '',
     photoUrl: '',
+    gender: '',
+    age: '',
+    location: '',
     audioNotificationsEnabled: true
   });
   const [editImageError, setEditImageError] = useState('');
@@ -96,6 +109,28 @@ export default function Home() {
     matchFilterEnabled: false,
     minMatchPercent: 75,
     maxMatchPercent: 100,
+    preferredLocation: '',
+    preferenceFilterEnabled: false,
+    preferredGender: 'Any',
+    minAge: 18,
+    maxAge: 60,
+  });
+
+  // Snapshot the current (live) filter state into appliedFiltersRef. Called
+  // wherever the app already applies filters (Apply Filters, Edit Profile
+  // save) so the background match-refresh poll always reflects the last
+  // filters the user actually submitted.
+  const snapshotAppliedFilters = () => ({
+    searchProfession,
+    searchKeyword,
+    matchFilterEnabled,
+    minMatchPercent,
+    maxMatchPercent,
+    preferredLocation,
+    preferenceFilterEnabled,
+    preferredGender,
+    minAge,
+    maxAge,
   });
 
   // Reusable helper for handling local image uploads
@@ -167,6 +202,9 @@ export default function Home() {
       profession: profile.profession || '',
       rawBio: profile.rawBio || '',
       photoUrl: profile.photoUrl || '',
+      gender: profile.gender || '',
+      age: profile.age !== null && profile.age !== undefined ? String(profile.age) : '',
+      location: profile.location || '',
       audioNotificationsEnabled: profile.audioNotificationsEnabled !== undefined ? profile.audioNotificationsEnabled : true
     });
   };
@@ -268,16 +306,22 @@ export default function Home() {
     setTimeout(() => setToastMessage(''), 4000);
   };
 
-  // Build filter payload including optional match percentage range
+  // Build filter payload including optional match percentage range and preferences
   const buildFilterPayload = (profile) => {
     const payload = {
       ...profile,
       searchProfession,
       searchKeyword,
+      preferredLocation,
     };
     if (matchFilterEnabled) {
       payload.minMatchPercent = minMatchPercent;
       payload.maxMatchPercent = maxMatchPercent;
+    }
+    if (preferenceFilterEnabled) {
+      payload.preferredGender = preferredGender;
+      payload.minAge = minAge;
+      payload.maxAge = maxAge;
     }
     return payload;
   };
@@ -401,7 +445,7 @@ export default function Home() {
   const refreshMatches = async (userId) => {
     if (!userId) return;
     try {
-      const { searchProfession: appliedProfession, searchKeyword: appliedKeyword, matchFilterEnabled: appliedFilterEnabled, minMatchPercent: appliedMin, maxMatchPercent: appliedMax } = appliedFiltersRef.current;
+      const { searchProfession: appliedProfession, searchKeyword: appliedKeyword, matchFilterEnabled: appliedFilterEnabled, minMatchPercent: appliedMin, maxMatchPercent: appliedMax, preferredLocation: appliedLocation, preferenceFilterEnabled: appliedPrefEnabled, preferredGender: appliedGender, minAge: appliedMinAge, maxAge: appliedMaxAge } = appliedFiltersRef.current;
 
       const params = new URLSearchParams({ userId });
       if (appliedProfession.trim()) params.set('searchProfession', appliedProfession.trim());
@@ -409,6 +453,12 @@ export default function Home() {
       if (appliedFilterEnabled) {
         params.set('minMatchPercent', appliedMin);
         params.set('maxMatchPercent', appliedMax);
+      }
+      if (appliedLocation.trim()) params.set('preferredLocation', appliedLocation.trim());
+      if (appliedPrefEnabled) {
+        params.set('preferredGender', appliedGender);
+        params.set('minAge', appliedMinAge);
+        params.set('maxAge', appliedMaxAge);
       }
 
       const res = await fetch(`/api/onboarding?${params.toString()}`);
@@ -880,13 +930,7 @@ export default function Home() {
         if (m.connectionStatus) statusMap[m.userId] = m.connectionStatus;
       });
       setConnectionStatuses(statusMap);
-      appliedFiltersRef.current = {
-        searchProfession,
-        searchKeyword,
-        matchFilterEnabled,
-        minMatchPercent,
-        maxMatchPercent,
-      };
+      appliedFiltersRef.current = snapshotAppliedFilters();
       setIsEditModalOpen(false);
       showToast("Profile schema changes safely written down to cluster indexing shards.");
     } catch (err) {
@@ -917,13 +961,7 @@ export default function Home() {
         if (m.connectionStatus) statusMap[m.userId] = m.connectionStatus;
       });
       setConnectionStatuses((prev) => ({ ...prev, ...statusMap }));
-      appliedFiltersRef.current = {
-        searchProfession,
-        searchKeyword,
-        matchFilterEnabled,
-        minMatchPercent,
-        maxMatchPercent,
-      };
+      appliedFiltersRef.current = snapshotAppliedFilters();
       showToast("Vector matching array search calculation index refreshed.");
     } catch (err) {
       setError(err.message || 'Timeout tracing query segments.');
@@ -1037,7 +1075,7 @@ export default function Home() {
     setMatches([]);
     setInputEmail('');
     setOtpCode('');
-    setRegisterForm({ name: '', profession: '', rawBio: '', photoUrl: '', audioNotificationsEnabled: true });
+    setRegisterForm({ name: '', profession: '', rawBio: '', photoUrl: '', gender: '', age: '', location: '', audioNotificationsEnabled: true });
     setRegisterImageError('');
     setEditImageError('');
     setSearchProfession('');
@@ -1045,12 +1083,22 @@ export default function Home() {
     setMatchFilterEnabled(false);
     setMinMatchPercent(75);
     setMaxMatchPercent(100);
+    setPreferredLocation('');
+    setPreferenceFilterEnabled(false);
+    setPreferredGender('Any');
+    setMinAge(18);
+    setMaxAge(60);
     appliedFiltersRef.current = {
       searchProfession: '',
       searchKeyword: '',
       matchFilterEnabled: false,
       minMatchPercent: 75,
       maxMatchPercent: 100,
+      preferredLocation: '',
+      preferenceFilterEnabled: false,
+      preferredGender: 'Any',
+      minAge: 18,
+      maxAge: 60,
     };
     setMessageRequests([]);
     setConnectionStatuses({});
@@ -1243,6 +1291,28 @@ export default function Home() {
                 <input type="text" required placeholder="e.g. Software Engineer, Student, Founder" value={registerForm.profession} onChange={(e) => setRegisterForm(prev => ({ ...prev, profession: e.target.value }))} className="w-full bg-[#FAF8F5] border border-[#ECE9E4] rounded-xl px-4 py-2 text-sm text-[#1B1B1D] focus:outline-none focus:border-[#EF3E56] font-body" />
               </div>
 
+              {/* Optional demographic fields — power the gender/age/location preference filters on the dashboard */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs uppercase font-bold text-[#6E6D72] block tracking-wide font-body">Gender <span className="normal-case font-medium text-[#9B9A9D]">(optional)</span></label>
+                  <select value={registerForm.gender} onChange={(e) => setRegisterForm(prev => ({ ...prev, gender: e.target.value }))} className="w-full bg-[#FAF8F5] border border-[#ECE9E4] rounded-xl px-4 py-2 text-sm text-[#1B1B1D] focus:outline-none focus:border-[#EF3E56] font-body">
+                    <option value="">Prefer not to say</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs uppercase font-bold text-[#6E6D72] block tracking-wide font-body">Age <span className="normal-case font-medium text-[#9B9A9D]">(optional)</span></label>
+                  <input type="number" min="18" max="120" placeholder="e.g. 28" value={registerForm.age} onChange={(e) => setRegisterForm(prev => ({ ...prev, age: e.target.value }))} className="w-full bg-[#FAF8F5] border border-[#ECE9E4] rounded-xl px-4 py-2 text-sm text-[#1B1B1D] focus:outline-none focus:border-[#EF3E56] font-body" />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs uppercase font-bold text-[#6E6D72] block tracking-wide font-body">Location <span className="normal-case font-medium text-[#9B9A9D]">(optional)</span></label>
+                <input type="text" placeholder="e.g. Mumbai, Bangalore" value={registerForm.location} onChange={(e) => setRegisterForm(prev => ({ ...prev, location: e.target.value }))} className="w-full bg-[#FAF8F5] border border-[#ECE9E4] rounded-xl px-4 py-2 text-sm text-[#1B1B1D] focus:outline-none focus:border-[#EF3E56] font-body" />
+              </div>
+
               {/* Profile Photo File Upload Field */}
               <div className="space-y-1">
                 <label className="text-xs uppercase font-bold text-[#6E6D72] block tracking-wide font-body">Profile photo</label>
@@ -1305,6 +1375,11 @@ export default function Home() {
               
               <h3 className="font-display text-xl font-bold text-[#1B1B1D] truncate text-center md:text-left">{userProfile.name}</h3>
               <p className="text-xs text-[#EF3E56] font-bold mb-1 tracking-wide font-body uppercase text-center md:text-left">{userProfile.profession || 'Professional'}</p>
+              {(userProfile.age || userProfile.location) && (
+                <p className="text-xs text-[#9B9A9D] font-medium font-body text-center md:text-left">
+                  {[userProfile.age ? `${userProfile.age}` : null, userProfile.location || null].filter(Boolean).join(' · ')}
+                </p>
+              )}
               <p className="text-xs text-[#9B9A9D] mb-4 font-body truncate text-center md:text-left">{userProfile.userId}</p>
               
               <div className="space-y-3 text-left bg-[#FAF8F5] p-4 rounded-2xl border border-[#ECE9E4] text-xs font-medium mb-4 font-body">
@@ -1342,13 +1417,17 @@ export default function Home() {
             {/* Real-time Cluster Query Interface Box */}
             <div className="bg-white border border-[#ECE9E4] rounded-3xl p-4 shadow-[0_8px_30px_rgba(0,0,0,0.04)] space-y-3">
               <div className="flex flex-col sm:flex-row gap-3 items-end">
-                <div className="w-full sm:w-1/2 space-y-1">
+                <div className="w-full sm:w-1/3 space-y-1">
                   <label className="text-[10px] uppercase font-bold text-[#6E6D72] block tracking-wide font-body">Filter by profession</label>
                   <input type="text" placeholder="e.g. Engineer, Student, Creator" value={searchProfession} onChange={(e) => setSearchProfession(e.target.value)} className="w-full bg-[#FAF8F5] border border-[#ECE9E4] rounded-xl px-3 py-2 text-xs text-[#1B1B1D] focus:outline-none focus:border-[#EF3E56] font-body" />
                 </div>
-                <div className="w-full sm:w-1/2 space-y-1">
+                <div className="w-full sm:w-1/3 space-y-1">
                   <label className="text-[10px] uppercase font-bold text-[#6E6D72] block tracking-wide font-body">Keyword search</label>
                   <input type="text" placeholder="Search names, interests or bio details..." value={searchKeyword} onChange={(e) => setSearchKeyword(e.target.value)} className="w-full bg-[#FAF8F5] border border-[#ECE9E4] rounded-xl px-3 py-2 text-xs text-[#1B1B1D] focus:outline-none focus:border-[#EF3E56] font-body" />
+                </div>
+                <div className="w-full sm:w-1/3 space-y-1">
+                  <label className="text-[10px] uppercase font-bold text-[#6E6D72] block tracking-wide font-body">Filter by location</label>
+                  <input type="text" placeholder="e.g. Mumbai, Bangalore" value={preferredLocation} onChange={(e) => setPreferredLocation(e.target.value)} className="w-full bg-[#FAF8F5] border border-[#ECE9E4] rounded-xl px-3 py-2 text-xs text-[#1B1B1D] focus:outline-none focus:border-[#EF3E56] font-body" />
                 </div>
                 <button onClick={handleApplyFilters} disabled={loading} className="w-full sm:w-auto px-5 py-2 bg-[#EF3E56] hover:bg-[#D42E44] text-white font-display font-bold text-xs rounded-full shadow-[0_8px_20px_rgba(239,62,86,0.3)] transition whitespace-nowrap disabled:opacity-50">
                   {loading ? 'Filtering…' : 'Apply filters'}
@@ -1410,6 +1489,75 @@ export default function Home() {
                   </div>
                 )}
               </div>
+
+              {/* Gender/Age Preference Filter — same toggle+detail pattern as Match % above */}
+              <div className="border-t border-[#ECE9E4] pt-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] uppercase font-bold text-[#6E6D72] tracking-wide font-body flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={preferenceFilterEnabled}
+                      onChange={(e) => setPreferenceFilterEnabled(e.target.checked)}
+                      className="accent-[#EF3E56] w-3.5 h-3.5"
+                    />
+                    Filter by preferences
+                  </label>
+                  {preferenceFilterEnabled && (
+                    <span className="text-xs font-bold font-display text-[#EF3E56]">
+                      {preferredGender} · {minAge}–{maxAge}
+                    </span>
+                  )}
+                </div>
+                {preferenceFilterEnabled && (
+                  <div className="px-1 space-y-2">
+                    <div className="flex items-center gap-3">
+                      <span className="text-[10px] text-[#9B9A9D] font-bold font-body w-8">Gender</span>
+                      <select
+                        value={preferredGender}
+                        onChange={(e) => setPreferredGender(e.target.value)}
+                        className="flex-1 bg-[#FAF8F5] border border-[#ECE9E4] rounded-xl px-3 py-1.5 text-xs text-[#1B1B1D] focus:outline-none focus:border-[#EF3E56] font-body"
+                      >
+                        <option value="Any">Any</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-[10px] text-[#9B9A9D] font-bold font-body w-8">{minAge}</span>
+                      <input
+                        type="range"
+                        min={18}
+                        max={99}
+                        value={minAge}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setMinAge(val);
+                          if (val > maxAge) setMaxAge(val);
+                        }}
+                        className="flex-1 accent-[#EF3E56] h-1.5"
+                      />
+                      <span className="text-[10px] text-[#9B9A9D] font-bold font-body">Min age</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-[10px] text-[#9B9A9D] font-bold font-body w-8">{maxAge}</span>
+                      <input
+                        type="range"
+                        min={18}
+                        max={99}
+                        value={maxAge}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setMaxAge(val);
+                          if (val < minAge) setMinAge(val);
+                        }}
+                        className="flex-1 accent-[#EF3E56] h-1.5"
+                      />
+                      <span className="text-[10px] text-[#9B9A9D] font-bold font-body">Max age</span>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="flex items-center justify-between px-1">
@@ -1450,6 +1598,11 @@ export default function Home() {
                       <div>
                         <h4 className="font-display text-md font-bold text-[#1B1B1D] tracking-tight">{item.name}</h4>
                         <p className="text-xs text-[#B26A00] font-semibold font-body">{item.profession || 'Connection'}</p>
+                        {(item.age || item.location) && (
+                          <p className="text-[10px] text-[#9B9A9D] font-medium font-body">
+                            {[item.age ? `${item.age}` : null, item.location || null].filter(Boolean).join(' · ')}
+                          </p>
+                        )}
                       </div>
                     </div>
                     <div className="text-right">
@@ -1545,6 +1698,28 @@ export default function Home() {
               <div>
                 <label className="text-[10px] uppercase font-bold text-[#6E6D72] block mb-1">Profession / interest</label>
                 <input type="text" required value={editForm.profession} onChange={(e) => setEditForm(prev => ({ ...prev, profession: e.target.value }))} className="w-full bg-[#FAF8F5] border border-[#ECE9E4] rounded-xl px-4 py-2 text-sm text-[#1B1B1D] focus:outline-none focus:border-[#EF3E56]" />
+              </div>
+
+              {/* Optional demographic fields — power the gender/age/location preference filters on the dashboard */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] uppercase font-bold text-[#6E6D72] block mb-1">Gender <span className="normal-case font-medium text-[#9B9A9D]">(optional)</span></label>
+                  <select value={editForm.gender} onChange={(e) => setEditForm(prev => ({ ...prev, gender: e.target.value }))} className="w-full bg-[#FAF8F5] border border-[#ECE9E4] rounded-xl px-4 py-2 text-sm text-[#1B1B1D] focus:outline-none focus:border-[#EF3E56]">
+                    <option value="">Prefer not to say</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] uppercase font-bold text-[#6E6D72] block mb-1">Age <span className="normal-case font-medium text-[#9B9A9D]">(optional)</span></label>
+                  <input type="number" min="18" max="120" value={editForm.age} onChange={(e) => setEditForm(prev => ({ ...prev, age: e.target.value }))} className="w-full bg-[#FAF8F5] border border-[#ECE9E4] rounded-xl px-4 py-2 text-sm text-[#1B1B1D] focus:outline-none focus:border-[#EF3E56]" />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] uppercase font-bold text-[#6E6D72] block mb-1">Location <span className="normal-case font-medium text-[#9B9A9D]">(optional)</span></label>
+                <input type="text" placeholder="e.g. Mumbai, Bangalore" value={editForm.location} onChange={(e) => setEditForm(prev => ({ ...prev, location: e.target.value }))} className="w-full bg-[#FAF8F5] border border-[#ECE9E4] rounded-xl px-4 py-2 text-sm text-[#1B1B1D] focus:outline-none focus:border-[#EF3E56]" />
               </div>
               
               {/* Profile Photo Upload Option */}
