@@ -1,0 +1,25 @@
+{
+  "name": "my-premium-match-app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "migrate:blocks": "node scripts/migrations/001-ensure-blocks-collection.js"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "autoprefixer": "^10.4.19",
+    "mongodb": "^7.5.0",
+    "mongoose": "^9.7.4",
+    "next": "^14.2.23",
+    "nodemailer": "^9.0.3",
+    "postcss": "^8.4.38",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "stripe": "^15.7.0",
+    "tailwindcss": "^3.4.3"
+  }
+}

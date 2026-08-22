@@ -1,0 +1,12 @@
+Set-Content -Path .gitignore -Value @"
+/node_modules
+/.next/
+/out/
+/build
+.env*.local
+.env
+.vercel
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+"@

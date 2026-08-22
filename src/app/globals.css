@@ -1,0 +1,263 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --vk-bg: #090D24;
+  --vk-surface: #11152F;
+  --vk-surface-elevated: #171C3B;
+  --vk-text-primary: #FFFFFF;
+  --vk-text-secondary: #EEF0FF;
+  --vk-text-muted: #B8BED8;
+  --vk-primary: #6C3CFF;
+  --vk-primary-hover: #8059FF;
+  --vk-cyan: #00D4FF;
+  --vk-pink: #FF3CAC;
+  --vk-success: #22C55E;
+  --vk-warning: #F59E0B;
+  --vk-error: #EF4444;
+  --vk-border: #2A3155;
+  --vk-focus: #00D4FF;
+  --vk-gradient-aurora: linear-gradient(135deg, #00D4FF 0%, #6C3CFF 50%, #FF3CAC 100%);
+}
+
+html, body { min-height: 100%; }
+body {
+  margin: 0;
+  color: var(--vk-text-primary);
+  background: var(--vk-bg);
+  font-family: Inter, system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+button, input, textarea, select { font: inherit; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
+  outline: 2px solid var(--vk-focus);
+  outline-offset: 2px;
+}
+::selection { background: rgba(108,60,255,.35); color: #fff; }
+
+@layer components {
+  .vk-surface { background: var(--vk-surface); border: 1px solid var(--vk-border); }
+  .vk-surface-elevated { background: var(--vk-surface-elevated); border: 1px solid var(--vk-border); }
+  .vk-gradient { background-image: var(--vk-gradient-aurora); }
+  .vk-focus-ring { box-shadow: 0 0 0 3px rgba(0,212,255,.18); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
+}
+
+/* VibeKey Dark / Light theme tokens */
+html[data-theme='light'] {
+  --vk-bg: #F7F8FC;
+  --vk-surface: #FFFFFF;
+  --vk-surface-elevated: #EEF0FF;
+  --vk-text-primary: #11152F;
+  --vk-text-secondary: #3E4665;
+  --vk-text-muted: #68708D;
+  --vk-primary: #6C3CFF;
+  --vk-primary-hover: #5930E6;
+  --vk-cyan: #009FC2;
+  --vk-pink: #E52E91;
+  --vk-border: #DDE1F0;
+  --vk-focus: #009FC2;
+  color-scheme: light;
+}
+html[data-theme='dark'] { color-scheme: dark; }
+
+/* Keep the existing VibeKey Tailwind classes, but make their theme colors follow the toggle. */
+html[data-theme='light'] .bg-vk-bg { background-color: var(--vk-bg) !important; }
+html[data-theme='light'] .bg-vk-surface { background-color: var(--vk-surface) !important; }
+html[data-theme='light'] .bg-vk-elevated { background-color: var(--vk-surface-elevated) !important; }
+html[data-theme='light'] .text-vk-white,
+html[data-theme='light'] .text-white { color: var(--vk-text-primary) !important; }
+html[data-theme='light'] .text-vk-text-muted,
+html[data-theme='light'] .text-vk-muted { color: var(--vk-text-muted) !important; }
+html[data-theme='light'] .border-vk-border { border-color: var(--vk-border) !important; }
+html[data-theme='light'] .border-\\[\\#2A3155\\] { border-color: var(--vk-border) !important; }
+html[data-theme='light'] .text-\\[\\#7F87A8\\] { color: #68708D !important; }
+html[data-theme='light'] .text-\\[\\#D6D0FF\\] { color: #4B3AA6 !important; }
+html[data-theme='light'] .text-\\[\\#EEF0FF\\] { color: #3E4665 !important; }
+html[data-theme='light'] .bg-\\[\\#090D24\\] { background-color: var(--vk-bg) !important; }
+html[data-theme='light'] .bg-\\[\\#11152F\\] { background-color: var(--vk-surface) !important; }
+html[data-theme='light'] input,
+html[data-theme='light'] textarea,
+html[data-theme='light'] select { color: var(--vk-text-primary); background-color: var(--vk-bg); }
+html[data-theme='light'] input::placeholder,
+html[data-theme='light'] textarea::placeholder { color: #7A819C; }
+
+
+/* Phase 2D notification center */
+.vk-notification-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--vk-border);
+  border-radius: 999px;
+  background: var(--vk-surface);
+  color: var(--vk-text-primary);
+  font-size: 17px;
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+.vk-notification-button:hover { border-color: var(--vk-cyan); transform: translateY(-1px); }
+.vk-notification-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #FF3CAC;
+  color: #FFFFFF;
+  border: 2px solid var(--vk-bg);
+  font-size: 9px;
+  line-height: 1;
+  font-weight: 800;
+}
+@media (max-width: 480px) {
+  .vk-notification-button { width: 38px; height: 38px; font-size: 15px; }
+}
+.vk-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 5px 8px;
+  border: 1px solid var(--vk-border);
+  border-radius: 9999px;
+  background: var(--vk-surface-elevated);
+  color: var(--vk-text-primary);
+  transition: border-color 180ms ease, background-color 180ms ease, transform 180ms ease;
+}
+.vk-theme-toggle:hover { border-color: var(--vk-cyan); }
+.vk-theme-toggle:active { transform: scale(.98); }
+.vk-theme-icon { width: 20px; text-align: center; opacity: .45; transition: opacity 180ms ease, transform 180ms ease; }
+.vk-theme-icon.active { opacity: 1; transform: scale(1.08); }
+.vk-theme-track {
+  position: relative;
+  width: 42px;
+  height: 22px;
+  border-radius: 9999px;
+  background: var(--vk-primary);
+  box-shadow: 0 0 18px rgba(108,60,255,.22);
+}
+.vk-theme-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,.22);
+  transition: transform 180ms ease;
+}
+html[data-theme='light'] .vk-theme-thumb { transform: translateX(20px); }
+html[data-theme='light'] .shadow-vk-md { box-shadow: 0 8px 24px rgba(17,21,47,.10) !important; }
+html[data-theme='light'] .shadow-vk-lg { box-shadow: 0 16px 48px rgba(17,21,47,.12) !important; }
+@media (max-width: 640px) {
+  .vk-theme-toggle { min-height: 36px; padding-inline: 6px; gap: 5px; }
+  .vk-theme-track { width: 38px; }
+  html[data-theme='light'] .vk-theme-thumb { transform: translateX(16px); }
+}
+
+/* VibeKey Light Mode readability corrections
+   Semantic light-theme overrides for legacy hard-coded dark-mode classes.
+   Dark mode remains unchanged. */
+html[data-theme='light'] [class~="text-vk-white"] { color: #11152F !important; }
+/* White text must remain white on primary/colored buttons in light mode. */
+html[data-theme='light'] [class~="text-white"] { color: #FFFFFF !important; }
+html[data-theme='light'] [class~="text-[#FFFFFF]"] { color: #11152F !important; }
+html[data-theme='light'] [class~="text-[#7F87A8]"] { color: #4B556F !important; }
+html[data-theme='light'] [class~="text-[#D6D0FF]"] { color: #40358F !important; }
+html[data-theme='light'] [class~="text-[#EEF0FF]"] { color: #20263A !important; }
+html[data-theme='light'] [class~="text-[#B8BED8]"] { color: #3E4665 !important; }
+html[data-theme='light'] [class~="text-vk-lavender"] { color: #40358F !important; }
+html[data-theme='light'] [class~="text-vk-text-secondary"] { color: #303750 !important; }
+html[data-theme='light'] [class~="text-vk-text-muted"] { color: #4B556F !important; }
+
+/* Legacy dark surfaces become readable light surfaces. */
+html[data-theme='light'] [class~="bg-[#090D24]"] { background-color: #FFFFFF !important; }
+html[data-theme='light'] [class~="bg-[#11152F]"] { background-color: #FFFFFF !important; }
+html[data-theme='light'] [class~="bg-[#28204A]"] { background-color: #EEF0FF !important; }
+
+/* Semantic labels with sufficient contrast on light surfaces. */
+html[data-theme='light'] [class~="text-[#FF7B8A]"] { color: #B4233C !important; }
+html[data-theme='light'] [class~="text-[#F59E0B]"] { color: #A15C00 !important; }
+html[data-theme='light'] [class~="text-[#22C55E]"] { color: #15803D !important; }
+html[data-theme='light'] [class~="text-[#6C3CFF]"] { color: #5B2EE6 !important; }
+
+/* Inputs, profile bios, AI analysis and select controls. */
+html[data-theme='light'] input,
+html[data-theme='light'] textarea,
+html[data-theme='light'] select { color: #11152F !important; background-color: #FFFFFF; }
+html[data-theme='light'] input::placeholder,
+html[data-theme='light'] textarea::placeholder { color: #66708A !important; opacity: 1; }
+html[data-theme='light'] select,
+html[data-theme='light'] option { color: #11152F !important; background-color: #FFFFFF !important; }
+html[data-theme='light'] .border-vk-border { border-color: var(--vk-border) !important; }
+
+/* Discovery statistics and status pills. */
+html[data-theme='light'] .vk-light-readable { color: #11152F !important; }
+html[data-theme='light'] .vk-light-readable-muted { color: #3E4665 !important; }
+html[data-theme='light'] .vk-light-readable-pill {
+  color: #40358F !important;
+  background-color: rgba(108,60,255,.10) !important;
+  border-color: rgba(108,60,255,.28) !important;
+}
+
+
+/* Final Light Mode contrast fixes for the discovery hero and statistics. */
+html[data-theme='light'] .vk-hero-label { color: #2F257A !important; }
+html[data-theme='light'] .vk-hero-description { color: #1F2937 !important; }
+html[data-theme='light'] .vk-discovery-label { color: #2F257A !important; background-color: rgba(108,60,255,.08) !important; }
+html[data-theme='light'] .vk-discovery-description { color: #1F2937 !important; }
+html[data-theme='light'] .vk-discovery-stat { background-color: #FFFFFF !important; border-color: #CBD2E3 !important; }
+html[data-theme='light'] .vk-stat-label { color: #374151 !important; }
+html[data-theme='light'] .vk-stat-value { color: #11152F !important; }
+html[data-theme='light'] .vk-range-value { color: #006B82 !important; }
+
+/* Final requested Light Mode treatment: keep these two hero texts white
+   on a dark VibeKey surface for maximum readability. */
+html[data-theme='light'] .vk-hero-label {
+  color: #FFFFFF !important;
+}
+html[data-theme='light'] .vk-hero-label {
+  background-color: #11152F !important;
+  border-radius: 9999px;
+  padding: 0.375rem 0.75rem;
+}
+html[data-theme='light'] .vk-hero-description {
+  color: #FFFFFF !important;
+  background-color: #11152F !important;
+  border-color: #2A3155 !important;
+}
+
+/* Phase 2C: final Light Mode readability fixes for auth/onboarding text. */
+html[data-theme='light'] .vk-auth-title {
+  color: #FFFFFF !important;
+  background-color: #11152F !important;
+  border-color: #2A3155 !important;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+}
+html[data-theme='light'] .vk-onboarding-banner { color: #11152F !important; background-color: #EEF0FF !important; }
+html[data-theme='light'] .vk-form-label { color: #374151 !important; }
+html[data-theme='light'] .vk-form-label .text-\[\#7F87A8\] { color: #4B5563 !important; }
+html[data-theme='light'] .vk-format-hint { color: #4B5563 !important; }
+/* Keep all profile/onboarding field text strongly readable on white surfaces. */
+html[data-theme='light'] .vk-form-label + input,
+html[data-theme='light'] .vk-form-label + select,
+html[data-theme='light'] .vk-form-label + textarea { color: #11152F !important; }
+
+
+/* Phase 2F-5: requested Light Mode text corrections only. */
+html[data-theme='light'] .vk-phase2f5-white { color: #FFFFFF !important; }
+html[data-theme='light'] .vk-phase2f5-white .text-\[\#7F87A8\] { color: #FFFFFF !important; }
